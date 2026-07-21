@@ -1,0 +1,24 @@
+# ============================================================
+# Custom Snort Rules — IDS_Snort_Project
+# ============================================================
+# Place this file at:  C:\Snort\rules\local.rules
+# HOME_NET is set in ids_project.conf (192.168.1.0/24)
+# ============================================================
+
+# RULE 1: ICMP Ping Flood — priority:1 → HIGH
+alert icmp any any -> any any (msg:"ICMP Ping Flood Detected"; itype:8; detection_filter: track by_src, count 10, seconds 1; priority:1; sid:1000001; rev:3;)
+
+# RULE 2a: Large TCP Packet — priority:2 → MEDIUM
+alert tcp any any -> any any (msg:"Large TCP Packet Detected - Possible Anomaly"; dsize:>5000; priority:2; sid:1000002; rev:3;)
+
+# RULE 2b: Large UDP Packet — priority:1 → HIGH
+alert udp any any -> any any (msg:"Large UDP Packet Detected - Possible Flood"; dsize:>1000; priority:1; sid:1000003; rev:3;)
+
+# RULE 3: Port Scan — priority:2 → MEDIUM
+alert tcp any any -> any any (msg:"Possible Port Scan Detected"; flags:S; detection_filter: track by_src, count 20, seconds 5; priority:2; sid:1000004; rev:3;)
+
+# RULE 4: SSH Brute Force — priority:1 → HIGH
+alert tcp any any -> any 22 (msg:"SSH Brute Force Attempt Detected"; flags:S; detection_filter: track by_src, count 5, seconds 60; priority:1; sid:1000005; rev:3;)
+
+# RULE 5: Single External ICMP Ping — priority:3 → LOW
+alert icmp any any -> any any (msg:"External ICMP Ping Detected"; itype:8; priority:3; sid:1000006; rev:3;)

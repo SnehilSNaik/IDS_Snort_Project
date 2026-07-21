@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Account — IDS Shield</title>
+  <meta name="description" content="Sign up for the IDS Security Command Center." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --blue:       #2563eb;
+      --blue-lt:    #dbeafe;
+      --purple:     #7c3aed;
+      --green:      #059669;
+      --green-lt:   #d1fae5;
+      --rose:       #e11d48;
+      --rose-lt:    #ffe4e6;
+      --amber:      #d97706;
+      --border:     #e2e8f0;
+      --text:       #0f172a;
+      --text-md:    #334155;
+      --text-muted: #64748b;
+      --white:      #ffffff;
+      --bg:         #f8fafc;
+      --font:       'Inter', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      font-family: var(--font);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* TOP NAV */
+    .top-bar {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 0 48px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .nav-logo {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--blue), var(--purple));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 12px; color: #fff;
+    }
+
+    .nav-name { font-size: 16px; font-weight: 700; color: var(--text); }
+
+    /* SPLIT LAYOUT */
+    .auth-layout {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: calc(100vh - 60px);
+    }
+
+    /* LEFT PANEL */
+    .auth-left {
+      background: linear-gradient(145deg, var(--purple) 0%, var(--blue) 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 48px;
+      color: #fff;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .auth-left::before {
+      content: '';
+      position: absolute;
+      top: -80px; left: -80px;
+      width: 320px; height: 320px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.05);
+    }
+    .auth-left::after {
+      content: '';
+      position: absolute;
+      bottom: -60px; right: -60px;
+      width: 250px; height: 250px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+    }
+
+    .auth-left-inner {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+    }
+
+    .auth-left svg {
+      width: 80px; height: 80px;
+      margin-bottom: 24px;
+      animation: float 4s ease-in-out infinite;
+    }
+    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+
+    .auth-left h2 { font-size: 26px; font-weight: 700; margin-bottom: 12px; line-height: 1.3; }
+    .auth-left p { font-size: 14px; opacity: 0.82; line-height: 1.7; max-width: 300px; }
+
+    .steps {
+      list-style: none;
+      margin-top: 28px;
+      text-align: left;
+    }
+    .steps li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13px;
+      opacity: 0.9;
+      margin-bottom: 14px;
+    }
+    .step-num {
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      width: 22px; height: 22px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* RIGHT PANEL */
+    .auth-right {
+      background: var(--white);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 48px;
+      overflow-y: auto;
+    }
+
+    .auth-form-wrap {
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .form-heading {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    .form-sub {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    /* Alert */
+    .alert {
+      border-radius: 9px;
+      padding: 11px 14px;
+      font-size: 13px;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .alert-error { background: var(--rose-lt); border: 1px solid #fecdd3; color: #9f1239; }
+
+    /* Form */
+    .form-group { margin-bottom: 16px; }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-md);
+      margin-bottom: 6px;
+    }
+
+    input[type="email"],
+    input[type="password"],
+    input[type="text"] {
+      width: 100%;
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 9px;
+      padding: 11px 14px;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      transition: all 0.18s;
+      outline: none;
+    }
+    input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px var(--blue-lt);
+    }
+    input.input-error { border-color: var(--rose) !important; }
+    input.input-ok { border-color: var(--green); }
+    input::placeholder { color: #cbd5e1; }
+
+    /* Strength meter */
+    .strength-bar {
+      height: 3px;
+      background: #e2e8f0;
+      border-radius: 2px;
+      margin-top: 7px;
+      overflow: hidden;
+    }
+    .strength-fill {
+      height: 100%;
+      border-radius: 2px;
+      width: 0%;
+      transition: width 0.3s, background 0.3s;
+    }
+    .strength-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      min-height: 14px;
+    }
+
+    /* Match hint */
+    .match-hint {
+      font-size: 11px;
+      margin-top: 5px;
+      min-height: 14px;
+    }
+
+    /* Submit */
+    .btn-submit {
+      width: 100%;
+      padding: 12px;
+      border-radius: 9px;
+      border: none;
+      background: var(--blue);
+      color: #fff;
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 2px 10px rgba(37,99,235,0.25);
+      margin-top: 8px;
+    }
+    .btn-submit:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(37,99,235,0.35); }
+
+    .form-footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .form-footer a { color: var(--blue); text-decoration: none; font-weight: 500; }
+    .form-footer a:hover { text-decoration: underline; }
+
+    .terms-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+      margin-top: 12px;
+      line-height: 1.5;
+    }
+
+    .back-home {
+      display: block;
+      text-align: center;
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+    .back-home:hover { color: var(--blue); }
+
+    @media (max-width: 700px) {
+      .auth-layout { grid-template-columns: 1fr; }
+      .auth-left { display: none; }
+      .auth-right { padding: 36px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top-bar">
+    <a class="nav-brand" href="/">
+      <div class="nav-logo">IDS</div>
+      <span class="nav-name">IDS Shield</span>
+    </a>
+  </div>
+
+  <div class="auth-layout">
+
+    <!-- LEFT BRANDING PANEL -->
+    <div class="auth-left">
+      <div class="auth-left-inner">
+        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M50 8L16 22v24c0 20 14.4 38.7 34 44 19.6-5.3 34-24 34-44V22L50 8z"
+                fill="rgba(255,255,255,0.12)" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
+          <path d="M36 50l10 10 18-20" stroke="white" stroke-width="3.5"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h2>Join IDS Shield</h2>
+        <p>Get access to real-time intrusion detection and your personal security dashboard.</p>
+        <ul class="steps">
+          <li>
+            <span class="step-num">1</span>
+            <span>Create your free account in seconds</span>
+          </li>
+          <li>
+            <span class="step-num">2</span>
+            <span>Log in to access the Security Command Center</span>
+          </li>
+          <li>
+            <span class="step-num">3</span>
+            <span>Click "Engage IDS Engine" to start monitoring</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- RIGHT FORM PANEL -->
+    <div class="auth-right">
+      <div class="auth-form-wrap">
+
+        <h1 class="form-heading">Create account</h1>
+        <p class="form-sub">Fill in the details below to get started for free.</p>
+
+        {% if error %}
+        <div class="alert alert-error">
+          <span>⚠</span>
+          <span>{{ error }}</span>
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/signup" id="signup-form" autocomplete="on">
+
+          <div class="form-group">
+            <label for="signup-username">Full Name</label>
+            <input type="text" id="signup-username" name="username"
+                   placeholder="e.g. Snehil Kallimar" required
+                   autocomplete="name" minlength="2" maxlength="60" />
+          </div>
+
+          <div class="form-group">
+            <label for="signup-email">Email address</label>
+            <input type="email" id="signup-email" name="email"
+                   placeholder="you@example.com" required autocomplete="email" />
+          </div>
+
+          <div class="form-group">
+            <label for="signup-password">Password</label>
+            <input type="password" id="signup-password" name="password"
+                   placeholder="At least 6 characters" required
+                   autocomplete="new-password" minlength="6" />
+            <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
+            <div class="strength-label" id="strength-label"></div>
+          </div>
+
+          <div class="form-group">
+            <label for="signup-confirm">Confirm Password</label>
+            <input type="password" id="signup-confirm" name="confirm"
+                   placeholder="Re-enter your password" required autocomplete="new-password" />
+            <div class="match-hint" id="match-hint"></div>
+          </div>
+
+          <button type="submit" class="btn-submit" id="signup-btn">
+            Create Account →
+          </button>
+
+          <p class="terms-hint">For academic use only. By signing up you agree to use this system responsibly.</p>
+        </form>
+
+        <div class="form-footer">
+          Already have an account? <a href="/login">Sign in here</a>
+        </div>
+
+        <a class="back-home" href="/">← Back to home</a>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const pwdInput     = document.getElementById('signup-password');
+    const confirmInput = document.getElementById('signup-confirm');
+    const strengthFill = document.getElementById('strength-fill');
+    const strengthLbl  = document.getElementById('strength-label');
+    const matchHint    = document.getElementById('match-hint');
+
+    pwdInput.addEventListener('input', () => {
+      const v = pwdInput.value;
+      let score = 0;
+      if (v.length >= 6) score++;
+      if (v.length >= 10) score++;
+      if (/[A-Z]/.test(v)) score++;
+      if (/[0-9]/.test(v)) score++;
+      if (/[^A-Za-z0-9]/.test(v)) score++;
+
+      const colors = ['#e11d48','#d97706','#d97706','#059669','#059669'];
+      const labels = ['Too short','Weak','Fair','Strong','Very strong'];
+      const widths = ['20%','40%','60%','80%','100%'];
+
+      if (!v) { strengthFill.style.width = '0%'; strengthLbl.textContent = ''; }
+      else {
+        const i = Math.min(score - 1, 4);
+        strengthFill.style.width      = widths[i];
+        strengthFill.style.background = colors[i];
+        strengthLbl.textContent       = labels[i];
+        strengthLbl.style.color       = colors[i];
+      }
+      checkMatch();
+    });
+
+    function checkMatch() {
+      const pw = pwdInput.value, cf = confirmInput.value;
+      if (!cf) { matchHint.textContent = ''; return; }
+      if (pw === cf) {
+        matchHint.textContent = '✓ Passwords match';
+        matchHint.style.color = '#059669';
+        confirmInput.classList.replace('input-error', 'input-ok') || confirmInput.classList.add('input-ok');
+      } else {
+        matchHint.textContent = '✗ Passwords do not match';
+        matchHint.style.color = '#e11d48';
+        confirmInput.classList.replace('input-ok', 'input-error') || confirmInput.classList.add('input-error');
+      }
+    }
+    confirmInput.addEventListener('input', checkMatch);
+
+    document.getElementById('signup-form').addEventListener('submit', function (e) {
+      if (pwdInput.value !== confirmInput.value) { e.preventDefault(); return; }
+      const btn = document.getElementById('signup-btn');
+      btn.textContent = 'Creating account…';
+      btn.style.opacity = '0.7';
+      btn.disabled = true;
+    });
+  </script>
+</body>
+</html>
