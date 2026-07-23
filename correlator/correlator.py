@@ -25,6 +25,10 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 from email_alert.send_alert import send_email_alert
+from blockchain.blockchain import AttackerBlockchain
+
+# Shared blockchain ledger instance (thread-safe internally)
+_blockchain = AttackerBlockchain()
 
 ALERTS_JSON = os.path.join(BASE_DIR, "alerts", "alerts.json")
 COUNT_JSON  = os.path.join(BASE_DIR, "alerts", "count.json")
@@ -158,7 +162,14 @@ def process_alert(new_alert):
                     
                     save_alerts()
                     print(f"[! CORRELATOR] MATCH FOUND! Merged {src_ip} into CORRELATED_ATTACK (Diff: {time_diff:.2f}s)")
-                    
+
+                    # Commit correlated attack permanently to blockchain
+                    threading.Thread(
+                        target=_blockchain.add_block,
+                        args=(dict(orig_alert),),
+                        daemon=True,
+                    ).start()
+
                     # Trigger email for correlated attack
                     threading.Thread(target=send_email_alert, args=(orig_alert,)).start()
                 return
@@ -167,11 +178,18 @@ def process_alert(new_alert):
         alerts_list.append(new_alert)
         if len(alerts_list) > 500:   # keep list small for fast JSON writes
             alerts_list.pop(0)
-            
+
         ip_cache[src_ip] = cache
         ip_cache[src_ip][engine] = {"time": now, "ref": new_alert}
-        
+
         save_alerts()
+
+        # Commit every new alert permanently to the blockchain ledger
+        threading.Thread(
+            target=_blockchain.add_block,
+            args=(dict(new_alert),),
+            daemon=True,
+        ).start()
         
         # We don't trigger emails here. The detection engines trigger their own emails 
         # when they send the UDP packet if they want to. Actually, we should handle it here 

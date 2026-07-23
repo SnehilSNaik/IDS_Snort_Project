@@ -535,6 +535,312 @@
       box-shadow: 0 0 12px rgba(244, 63, 94, 0.2);
     }
 
+    /* ======================================================
+       BLOCKCHAIN LEDGER STYLES
+    ====================================================== */
+    .bc-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .bc-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .bc-title-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 4px 14px rgba(99,102,241,0.4);
+    }
+    .chain-status-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      transition: all 0.3s;
+    }
+    .chain-status-banner.valid {
+      background: rgba(5,150,105,0.1);
+      border: 1.5px solid rgba(5,150,105,0.4);
+      color: #059669;
+    }
+    .chain-status-banner.tampered {
+      background: rgba(225,29,72,0.1);
+      border: 1.5px solid rgba(225,29,72,0.5);
+      color: #e11d48;
+      animation: tamper-pulse 1s infinite;
+    }
+    @keyframes tamper-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(225,29,72,0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(225,29,72,0); }
+    }
+    .bc-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+    }
+    .bc-stat-card {
+      padding: 18px 20px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.08));
+      border: 1px solid rgba(99,102,241,0.2);
+      text-align: center;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .bc-stat-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(99,102,241,0.15); }
+    .bc-stat-val {
+      font-size: 32px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      background: linear-gradient(135deg, #6366f1, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .bc-stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .bc-search-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .bc-search-input {
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--glass-border);
+      background: var(--bg-base);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-main);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .bc-search-input:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+    }
+    .btn-indigo {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: var(--font-ui);
+      font-size: 13px;
+      font-weight: 600;
+      transition: opacity 0.2s, transform 0.2s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .btn-indigo:hover { opacity: 0.88; transform: translateY(-1px); }
+    .btn-ghost-indigo {
+      background: rgba(99,102,241,0.08);
+      color: #6366f1;
+      border: 1px solid rgba(99,102,241,0.3);
+      padding: 10px 18px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: var(--font-ui);
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.2s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .btn-ghost-indigo:hover { background: rgba(99,102,241,0.15); }
+
+    /* Block Explorer table tweaks */
+    .bc-table th { background: rgba(99,102,241,0.06); }
+    .block-row { cursor: pointer; }
+    .block-row:hover { background: rgba(99,102,241,0.05) !important; }
+    .block-detail-row { display: none; }
+    .block-detail-row.open { display: table-row; }
+    .block-detail-cell {
+      background: rgba(99,102,241,0.04);
+      padding: 14px 20px;
+      border-radius: 0 0 8px 8px;
+    }
+    .hash-chip {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: rgba(99,102,241,0.08);
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 6px;
+      padding: 3px 8px;
+      color: #6366f1;
+      word-break: break-all;
+      max-width: 100%;
+    }
+    .attacker-ip-tag {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: rgba(99,102,241,0.07);
+      border: 1px solid rgba(99,102,241,0.18);
+      border-radius: 6px;
+      padding: 3px 8px;
+      color: #4f46e5;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .attacker-ip-tag:hover { background: rgba(99,102,241,0.15); }
+    .top-attacker-row td { vertical-align: middle; }
+    .hit-bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .hit-bar {
+      flex: 1;
+      height: 6px;
+      border-radius: 4px;
+      background: rgba(99,102,241,0.15);
+      overflow: hidden;
+    }
+    .hit-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #6366f1, #a78bfa);
+      transition: width 0.5s ease;
+    }
+
+    /* ======================================================
+       FIREWALL / IP BLOCKER STYLES
+    ====================================================== */
+    .fw-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .fw-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .fw-title-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, #e11d48, #f43f5e);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 4px 14px rgba(225,29,72,0.4);
+    }
+    .fw-stats-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .fw-stat-chip {
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .fw-stat-chip.blocked {
+      background: rgba(225,29,72,0.08);
+      border: 1.5px solid rgba(225,29,72,0.3);
+      color: #e11d48;
+    }
+    .fw-stat-chip.fw {
+      background: rgba(5,150,105,0.08);
+      border: 1.5px solid rgba(5,150,105,0.3);
+      color: #059669;
+    }
+    .fw-manual-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .fw-ip-input {
+      flex: 1;
+      min-width: 200px;
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--glass-border);
+      background: var(--bg-base);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-main);
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .fw-ip-input:focus {
+      border-color: #e11d48;
+      box-shadow: 0 0 0 3px rgba(225,29,72,0.12);
+    }
+    .btn-block {
+      background: linear-gradient(135deg, #e11d48, #f43f5e);
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      transition: opacity 0.2s, transform 0.15s;
+      white-space: nowrap;
+    }
+    .btn-block:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn-block:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-unblock {
+      background: rgba(5,150,105,0.1);
+      color: #059669;
+      border: 1px solid rgba(5,150,105,0.3);
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 700;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-unblock:hover { background: rgba(5,150,105,0.2); }
+    .blocked-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      background: rgba(225,29,72,0.12);
+      border: 1px solid rgba(225,29,72,0.4);
+      color: #e11d48;
+      text-transform: uppercase;
+    }
+    .row-blocked {
+      background: rgba(225,29,72,0.04) !important;
+      border-left: 3px solid #e11d48;
+    }
+    .row-blocked:hover { background: rgba(225,29,72,0.08) !important; }
+
   </style>
 </head>
 <body>
@@ -649,6 +955,7 @@
             <th>Rate</th>
             <th>Confidence</th>
             <th>Message</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody id="alerts-body">
@@ -660,6 +967,134 @@
         <span>No threats detected. Radar is clear.</span>
       </div>
     </div>
+
+    <!-- ============================================================
+         FIREWALL — BLOCKED IPs PANEL
+    ============================================================ -->
+    <div class="controls fade-in" style="animation-delay: 0.28s;">
+      <div class="fw-panel-header">
+        <div class="fw-title">
+          <div class="fw-title-icon">&#x1F6AB;</div>
+          IP Firewall &mdash; Blocked Attackers
+        </div>
+        <div class="fw-stats-row">
+          <div class="fw-stat-chip blocked">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            <span id="fw-blocked-count">0</span> IPs Blocked
+          </div>
+          <div class="fw-stat-chip fw">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span id="fw-rule-count">0</span> OS Rules Applied
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass-panel fade-in" style="padding: 20px; animation-delay: 0.29s;">
+      <!-- Manual block input -->
+      <div class="fw-manual-row" style="margin-bottom:16px;">
+        <input id="fw-manual-ip" class="fw-ip-input" type="text" placeholder="Enter IP to block manually (e.g. 1.2.3.4)" />
+        <input id="fw-manual-reason" class="fw-ip-input" type="text" placeholder="Reason (optional)" style="max-width:220px;"/>
+        <button class="btn-block" onclick="manualBlockIP()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+          Block IP
+        </button>
+        <button class="btn-ghost-indigo" onclick="loadBlockedIPs()" style="padding:10px 14px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+
+      <!-- Blocked IPs table -->
+      <div style="overflow-x:auto;">
+        <table id="fw-blocked-table" style="width:100%;border-collapse:collapse;">
+          <thead><tr style="border-bottom:1px solid var(--glass-border);">
+            <th style="padding:10px 14px;text-align:left;font-size:12px;color:var(--text-muted);font-weight:600;">Blocked IP</th>
+            <th style="padding:10px 14px;text-align:left;font-size:12px;color:var(--text-muted);font-weight:600;">Blocked At</th>
+            <th style="padding:10px 14px;text-align:left;font-size:12px;color:var(--text-muted);font-weight:600;">By</th>
+            <th style="padding:10px 14px;text-align:left;font-size:12px;color:var(--text-muted);font-weight:600;">Reason</th>
+            <th style="padding:10px 14px;text-align:left;font-size:12px;color:var(--text-muted);font-weight:600;">OS Firewall</th>
+            <th style="padding:10px 14px;text-align:left;font-size:12px;color:var(--text-muted);font-weight:600;">Action</th>
+          </tr></thead>
+          <tbody id="fw-blocked-body">
+            <tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted);">No IPs currently blocked.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         BLOCKCHAIN LEDGER SECTION
+    ============================================================ -->
+
+    <!-- Header + Chain Status -->
+    <div class="controls fade-in" style="animation-delay: 0.3s; margin-top: 8px;">
+      <div class="bc-header">
+        <div class="bc-title">
+          <div class="bc-title-icon">&#x26D3;</div>
+          Blockchain Attacker Ledger
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <div id="chain-status-banner" class="chain-status-banner valid">
+            &#x26A1; Verifying chain...
+          </div>
+          <button class="btn-ghost-indigo" onclick="verifyChain()" id="btn-verify">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Verify Chain
+          </button>
+          <button class="btn-ghost-indigo" onclick="loadBlockchainData()" id="btn-bc-refresh">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Blockchain Stats Cards -->
+    <div class="bc-stats-grid fade-in" style="animation-delay: 0.35s;">
+      <div class="bc-stat-card">
+        <div class="bc-stat-val" id="bc-total-blocks">—</div>
+        <div class="bc-stat-label">Total Blocks</div>
+      </div>
+      <div class="bc-stat-card">
+        <div class="bc-stat-val" id="bc-attacker-blocks">—</div>
+        <div class="bc-stat-label">Attacker Records</div>
+      </div>
+      <div class="bc-stat-card">
+        <div class="bc-stat-val" id="bc-unique-ips">—</div>
+        <div class="bc-stat-label">Unique Attackers</div>
+      </div>
+      <div class="bc-stat-card">
+        <div class="bc-stat-val" id="bc-high-count" style="background:linear-gradient(135deg,#e11d48,#f43f5e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">—</div>
+        <div class="bc-stat-label">HIGH Severity</div>
+      </div>
+      <div class="bc-stat-card">
+        <div class="bc-stat-val" id="bc-last-block" style="font-size:12px; background:linear-gradient(135deg,#059669,#34d399);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">—</div>
+        <div class="bc-stat-label">Last Block Time</div>
+      </div>
+    </div>
+
+    <!-- Top Attackers Table -->
+    <div class="controls fade-in" style="animation-delay: 0.4s;">
+      <h2>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        Top Attackers (Permanent Record)
+      </h2>
+    </div>
+    <div class="glass-panel table-wrapper fade-in" style="animation-delay: 0.45s;">
+      <table class="bc-table">
+        <thead><tr>
+          <th>#</th><th>Attacker IP</th><th>Hit Count</th>
+          <th>HIGH</th><th>MED</th><th>LOW</th>
+          <th>Protocols</th><th>Last Seen (UTC)</th>
+        </tr></thead>
+        <tbody id="bc-top-attackers-body">
+          <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px;">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+
 
   </div>
 
@@ -685,6 +1120,9 @@
     // Keep track of current DOM max alerts to prevent full re-renders
     let existingAlertIds = new Set();
     let oldStats = { total: 0, high: 0, medium: 0, low: 0, avg_confidence: 0 };
+
+    // Live set of currently blocked IPs (refreshed with firewall data)
+    let blockedIPs = new Set();
 
     async function fetchDashboardUpdates() {
       try {
@@ -775,11 +1213,16 @@
     function createRow(alert) {
       const tr = document.createElement('tr');
       tr.style.animation = 'fadeIn 0.4s ease-out forwards';
+      const isBlocked = blockedIPs.has(alert.src_ip);
+      if (isBlocked) tr.classList.add('row-blocked');
       tr.innerHTML = `
         <td>${alert.timestamp}</td>
         <td><span class="sev-badge sev-${alert.severity}">${alert.severity}</span></td>
         <td><span class="proto-label">${alert.protocol}</span></td>
-        <td class="ip-col">${alert.src_ip}</td>
+        <td class="ip-col">
+          ${alert.src_ip}
+          ${isBlocked ? '<span class="blocked-badge">&#x1F6AB; Blocked</span>' : ''}
+        </td>
         <td class="ip-col">${alert.dst_ip}</td>
         <td>${alert.packet_size} B</td>
         <td>${alert.packet_rate} pps</td>
@@ -790,6 +1233,12 @@
           <span>${alert.confidence}%</span>
         </td>
         <td class="msg-col" title="${alert.message}">${alert.message}</td>
+        <td>
+          ${isBlocked
+            ? `<button class="btn-unblock" onclick="unblockIP('${alert.src_ip}')">Unblock</button>`
+            : `<button class="btn-block" onclick="blockIP('${alert.src_ip}','Blocked from Live Alert','${alert.severity}','${alert.type}')">Block</button>`
+          }
+        </td>
       `;
       return tr;
     }
@@ -883,6 +1332,209 @@
     fetchAlerts();
     setInterval(fetchStats,  200);   // near-instant count updates
     setInterval(fetchAlerts, 1000);  // table updates every 1s
+
+    // ================================================================
+    // BLOCKCHAIN LEDGER  JS
+    // ================================================================
+
+    const SEV_COLORS = { HIGH: '#e11d48', MEDIUM: '#d97706', LOW: '#059669', INFO: '#6366f1' };
+
+    function sevBadge(sev) {
+      const c = SEV_COLORS[sev] || '#64748b';
+      return `<span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px;background:${c}22;border:1px solid ${c}55;color:${c}">${sev||'?'}</span>`;
+    }
+
+    async function verifyChain() {
+      const banner = document.getElementById('chain-status-banner');
+      banner.className = 'chain-status-banner valid';
+      banner.innerHTML = '&#x23F3; Verifying...';
+      try {
+        const res  = await fetch('/api/blockchain/verify', { cache: 'no-store' });
+        const data = await res.json();
+        if (data.valid) {
+          banner.className = 'chain-status-banner valid';
+          banner.innerHTML = '&#x2705; CHAIN VALID &mdash; All blocks verified, no tampering detected';
+        } else {
+          banner.className = 'chain-status-banner tampered';
+          banner.innerHTML = `&#x26A0;&#xFE0F; CHAIN TAMPERED &mdash; Integrity broken at Block #${data.broken_at}`;
+        }
+      } catch(e) {
+        banner.innerHTML = '&#x26A0;&#xFE0F; Verification failed: ' + e.message;
+      }
+    }
+
+    async function loadBlockchainData() {
+      await loadBCStats();
+    }
+
+    async function loadBCStats() {
+      try {
+        const res  = await fetch('/api/blockchain/stats', { cache: 'no-store' });
+        const data = await res.json();
+        if (data.status !== 'ok') return;
+
+        // Stat cards
+        document.getElementById('bc-total-blocks').textContent    = data.total_blocks ?? '—';
+        document.getElementById('bc-attacker-blocks').textContent = data.attacker_blocks ?? '—';
+        document.getElementById('bc-unique-ips').textContent      = data.unique_attackers ?? '—';
+        document.getElementById('bc-high-count').textContent      = (data.severity_counts && data.severity_counts.HIGH) ?? '—';
+        document.getElementById('bc-last-block').textContent      = data.last_block_time ?? '—';
+
+        // Chain status banner (piggy-back on stats endpoint)
+        const banner = document.getElementById('chain-status-banner');
+        if (data.chain_valid) {
+          banner.className = 'chain-status-banner valid';
+          banner.innerHTML = `&#x2705; CHAIN VALID &mdash; ${data.total_blocks} blocks secured`;
+        } else {
+          banner.className = 'chain-status-banner tampered';
+          banner.innerHTML = `&#x26A0;&#xFE0F; CHAIN TAMPERED at Block #${data.broken_at}`;
+        }
+
+        // Top Attackers table
+        const tbody = document.getElementById('bc-top-attackers-body');
+        const top   = data.top_attackers || [];
+        const maxHits = top.length > 0 ? top[0].count : 1;
+
+        if (top.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:20px;">No attacker records yet.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = top.map((a, i) => {
+          const pct = Math.round((a.count / maxHits) * 100);
+          const isBlocked = blockedIPs.has(a.ip);
+          return `
+            <tr class="top-attacker-row${isBlocked ? ' row-blocked' : ''}">
+              <td style="font-family:var(--font-mono);color:var(--text-muted);">${i+1}</td>
+              <td>
+                <span class="attacker-ip-tag">${a.ip}</span>
+                ${isBlocked ? '<span class="blocked-badge">&#x1F6AB; Blocked</span>' : ''}
+              </td>
+              <td>
+                <div class="hit-bar-wrap">
+                  <div class="hit-bar"><div class="hit-bar-fill" style="width:${pct}%"></div></div>
+                  <strong style="font-family:var(--font-mono);">${a.count}</strong>
+                </div>
+              </td>
+              <td><span style="color:#e11d48;font-weight:700;">${a.HIGH||0}</span></td>
+              <td><span style="color:#d97706;font-weight:700;">${a.MEDIUM||0}</td>
+              <td><span style="color:#059669;font-weight:700;">${a.LOW||0}</td>
+              <td style="font-size:11px;color:var(--text-muted);">${(a.protocols||[]).join(', ')||'\u2014'}</td>
+              <td style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);">${a.last_seen}</td>
+              <td>
+                ${isBlocked
+                  ? `<button class="btn-unblock" onclick="unblockIP('${a.ip}')">Unblock</button>`
+                  : `<button class="btn-block" onclick="blockIP('${a.ip}','Blocked from Blockchain Ledger','${a.HIGH>0?'HIGH':'MEDIUM'}')">Block IP</button>`
+                }
+              </td>
+            </tr>`;
+        }).join('');
+
+      } catch(e) { console.warn('BC stats error:', e); }
+    }
+
+
+
+    // Initial load + auto-refresh every 5 seconds
+    loadBlockchainData();
+    verifyChain();
+    loadBlockedIPs();
+    setInterval(loadBlockchainData, 5000);
+    setInterval(loadBlockedIPs, 5000);
+
+    // ================================================================
+    // FIREWALL / IP BLOCKING  JS
+    // ================================================================
+
+    async function loadBlockedIPs() {
+      try {
+        const res  = await fetch('/api/firewall/blocked', { cache: 'no-store' });
+        const data = await res.json();
+        if (data.status !== 'ok') return;
+
+        // Update global set
+        blockedIPs = new Set(data.blocked_ips || []);
+
+        // Update counters
+        document.getElementById('fw-blocked-count').textContent = data.total_blocked || 0;
+        document.getElementById('fw-rule-count').textContent    = data.firewall_applied || 0;
+
+        // Render table
+        const tbody = document.getElementById('fw-blocked-body');
+        if (!data.blocked || data.blocked.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted);">No IPs currently blocked. Use the Block button in the alerts table or enter an IP above.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.blocked.map(e => `
+          <tr class="row-blocked">
+            <td style="padding:10px 14px;font-family:var(--font-mono);font-weight:700;color:#e11d48;">
+              ${e.ip}
+            </td>
+            <td style="padding:10px 14px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted);">${e.blocked_at}</td>
+            <td style="padding:10px 14px;font-size:12px;">${e.blocked_by}</td>
+            <td style="padding:10px 14px;font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${e.reason}">${e.reason}</td>
+            <td style="padding:10px 14px;">
+              ${e.firewall_rule
+                ? '<span style="color:#059669;font-weight:700;font-size:11px;">&#x2705; Active</span>'
+                : '<span style="color:#d97706;font-size:11px;">Software only</span>'
+              }
+            </td>
+            <td style="padding:10px 14px;">
+              <button class="btn-unblock" onclick="unblockIP('${e.ip}')">&#x2713; Unblock</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch(e) { console.warn('Firewall load error:', e); }
+    }
+
+    async function blockIP(ip, reason, severity, attackType) {
+      if (!ip || ip === '0.0.0.0') return;
+      try {
+        const res  = await fetch(`/api/firewall/block/${encodeURIComponent(ip)}`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ reason: reason || 'Blocked from dashboard', severity: severity || 'UNKNOWN', attack_type: attackType || 'UNKNOWN' }),
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('&#x1F6AB; ' + data.message, 'ok');
+          blockedIPs.add(ip);
+          loadBlockedIPs();
+          // Trigger full alert re-render to update block buttons
+          existingAlertIds.clear();
+          fetchDashboardUpdates();
+          loadBlockchainData();
+        } else {
+          showToast('&#x26A0;&#xFE0F; ' + data.message, 'err');
+        }
+      } catch(e) { showToast('Error: ' + e.message, 'err'); }
+    }
+
+    async function unblockIP(ip) {
+      if (!ip) return;
+      try {
+        const res  = await fetch(`/api/firewall/unblock/${encodeURIComponent(ip)}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('&#x2705; ' + data.message, 'ok');
+          blockedIPs.delete(ip);
+          loadBlockedIPs();
+          existingAlertIds.clear();
+          fetchDashboardUpdates();
+          loadBlockchainData();
+        } else {
+          showToast('&#x26A0;&#xFE0F; ' + data.message, 'err');
+        }
+      } catch(e) { showToast('Error: ' + e.message, 'err'); }
+    }
+
+    async function manualBlockIP() {
+      const ip     = document.getElementById('fw-manual-ip').value.trim();
+      const reason = document.getElementById('fw-manual-reason').value.trim() || 'Manual block';
+      if (!ip) { showToast('Please enter an IP address.', 'err'); return; }
+      await blockIP(ip, reason, 'UNKNOWN', 'MANUAL');
+      document.getElementById('fw-manual-ip').value     = '';
+      document.getElementById('fw-manual-reason').value = '';
+    }
 
   </script>
 </body>

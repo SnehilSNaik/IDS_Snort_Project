@@ -43,6 +43,25 @@ app = Flask(__name__, template_folder="templates")
 app.secret_key = os.environ.get("IDS_SECRET_KEY", "ids-secret-key-change-in-prod-2024")
 
 BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Blockchain ledger — lazy import so app boots even before correlator runs
+try:
+    sys.path.insert(0, BASE_DIR)
+    from blockchain.blockchain import AttackerBlockchain as _BC
+    _blockchain = _BC()
+except Exception as _bc_err:
+    _blockchain = None
+    print(f"[DASHBOARD] Blockchain unavailable: {_bc_err}")
+
+# IP Blocker — lazy import
+try:
+    from firewall.ip_blocker import IPBlocker as _IB
+    _blocker = _IB()
+except Exception as _fw_err:
+    _blocker = None
+    print(f"[DASHBOARD] IP Blocker unavailable: {_fw_err}")
+
+
 ALERTS_FILE  = os.path.join(os.path.dirname(__file__), "../alerts/alerts.json")
 COUNT_FILE   = os.path.join(os.path.dirname(__file__), "../alerts/count.json")
 USERS_FILE   = os.path.join(os.path.dirname(__file__), "users.json")
@@ -337,6 +356,156 @@ def api_test_email():
         return jsonify({"status": "ok", "message": "Test email dispatched."})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# --------------------------------------------------------
+# BLOCKCHAIN API ROUTES  (all login-required)
+# --------------------------------------------------------
+
+@app.route("/api/blockchain")
+@login_required
+def api_blockchain():
+    """Return all blocks in the chain."""
+    if _blockchain is None:
+        return jsonify({"status": "error", "message": "Blockchain not available"}), 503
+    try:
+        records = _blockchain.get_all_records()
+        return jsonify({"status": "ok", "total_blocks": len(records), "blocks": records})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/blockchain/verify")
+@login_required
+def api_blockchain_verify():
+    """Verify full chain integrity."""
+    if _blockchain is None:
+        return jsonify({"status": "error", "message": "Blockchain not available"}), 503
+    try:
+        valid, broken_at = _blockchain.is_chain_valid()
+        return jsonify({
+            "status":     "ok",
+            "valid":      valid,
+            "broken_at":  broken_at,
+            "message":    "Chain integrity verified ✅" if valid else f"⚠️ Chain TAMPERED at block #{broken_at}",
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/blockchain/attacker/<path:ip>")
+@login_required
+def api_blockchain_attacker(ip):
+    """Return all blocks for a specific attacker IP."""
+    if _blockchain is None:
+        return jsonify({"status": "error", "message": "Blockchain not available"}), 503
+    try:
+        records = _blockchain.get_attacker_records(ip)
+        return jsonify({"status": "ok", "ip": ip, "count": len(records), "blocks": records})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/blockchain/stats")
+@login_required
+def api_blockchain_stats():
+    """Aggregated attacker stats from the blockchain."""
+    if _blockchain is None:
+        return jsonify({"status": "error", "message": "Blockchain not available"}), 503
+    try:
+        summary = _blockchain.get_attacker_summary()
+        valid, broken_at = _blockchain.is_chain_valid()
+        summary["chain_valid"]  = valid
+        summary["broken_at"]   = broken_at
+        return jsonify({"status": "ok", **summary})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# --------------------------------------------------------
+# FIREWALL / IP BLOCK API ROUTES  (all login-required)
+# --------------------------------------------------------
+
+@app.route("/api/firewall/blocked")
+@login_required
+def api_blocked_list():
+    """Return all currently blocked IPs."""
+    if _blocker is None:
+        return jsonify({"status": "error", "message": "Blocker not available"}), 503
+    try:
+        stats = _blocker.get_stats()
+        return jsonify({"status": "ok", "blocked": _blocker.get_all(), **stats})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/firewall/block/<path:ip>", methods=["POST"])
+@login_required
+def api_block_ip(ip):
+    """Block an attacker IP (adds to blocklist + applies Windows Firewall rule)."""
+    if _blocker is None:
+        return jsonify({"status": "error", "message": "Blocker not available"}), 503
+    try:
+        data        = request.get_json(silent=True) or {}
+        reason      = data.get("reason", "Blocked from IDS dashboard")
+        blocked_by  = session.get("user_username", "admin")
+        severity    = data.get("severity", "UNKNOWN")
+        attack_type = data.get("attack_type", "UNKNOWN")
+
+        if _blocker.is_blocked(ip):
+            return jsonify({"status": "ok", "message": f"{ip} is already blocked.", "already_blocked": True})
+
+        entry = _blocker.block_ip(ip, reason=reason, blocked_by=blocked_by,
+                                   severity=severity, attack_type=attack_type)
+
+        # Also commit the block event to the blockchain ledger
+        if _blockchain:
+            _blockchain.add_block({
+                "type":       "IP_BLOCKED",
+                "severity":   "HIGH",
+                "src_ip":     ip,
+                "dst_ip":     "0.0.0.0",
+                "protocol":   "ANY",
+                "confidence": 100.0,
+                "blocked_by": blocked_by,
+                "reason":     reason,
+                "message":    f"IP {ip} manually BLOCKED by {blocked_by}: {reason}",
+            })
+
+        fw_msg = " + Windows Firewall rule applied" if entry.get("firewall_rule") else " (software-only — run as admin for OS firewall)"
+        return jsonify({
+            "status":  "ok",
+            "message": f"IP {ip} has been BLOCKED.{fw_msg}",
+            "entry":   entry,
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/firewall/unblock/<path:ip>", methods=["DELETE"])
+@login_required
+def api_unblock_ip(ip):
+    """Unblock a previously blocked IP."""
+    if _blocker is None:
+        return jsonify({"status": "error", "message": "Blocker not available"}), 503
+    try:
+        ok = _blocker.unblock_ip(ip)
+        if not ok:
+            return jsonify({"status": "error", "message": f"{ip} was not in the blocklist."}), 404
+        return jsonify({"status": "ok", "message": f"IP {ip} has been UNBLOCKED."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/firewall/check/<path:ip>")
+@login_required
+def api_check_ip(ip):
+    """Check if a given IP is currently blocked."""
+    if _blocker is None:
+        return jsonify({"status": "error", "message": "Blocker not available"}), 503
+    blocked = _blocker.is_blocked(ip)
+    entry   = _blocker.get_entry(ip) if blocked else None
+    return jsonify({"status": "ok", "ip": ip, "blocked": blocked, "entry": entry})
 
 
 # --------------------------------------------------------
