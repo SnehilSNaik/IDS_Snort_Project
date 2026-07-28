@@ -26,6 +26,7 @@ sys.path.insert(0, BASE_DIR)
 
 from email_alert.send_alert import send_email_alert
 from blockchain.blockchain import AttackerBlockchain
+from telegram_alert.telegram_bot import send_telegram_in_background
 
 # Shared blockchain ledger instance (thread-safe internally)
 _blockchain = AttackerBlockchain()
@@ -172,6 +173,9 @@ def process_alert(new_alert):
 
                     # Trigger email for correlated attack
                     threading.Thread(target=send_email_alert, args=(orig_alert,)).start()
+
+                    # Telegram real-time alert (non-blocking)
+                    send_telegram_in_background(orig_alert)
                 return
 
         # 3. No match found within window. Add as separate alert.
@@ -190,10 +194,9 @@ def process_alert(new_alert):
             args=(dict(new_alert),),
             daemon=True,
         ).start()
-        
-        # We don't trigger emails here. The detection engines trigger their own emails 
-        # when they send the UDP packet if they want to. Actually, we should handle it here 
-        # so email logic is centralized, but we'll stick to the existing engine logic.
+
+        # Telegram real-time alert for HIGH/MEDIUM (non-blocking, rate-limited per IP)
+        send_telegram_in_background(new_alert)
 
 
 def start_correlator():
