@@ -27,6 +27,8 @@ import os
 import sys
 import json
 import time
+import re
+import socket
 import subprocess
 from functools import wraps
 from flask import (
@@ -68,6 +70,67 @@ USERS_FILE   = os.path.join(os.path.dirname(__file__), "users.json")
 
 # Global list to track running background engines
 active_processes = []
+
+
+# --------------------------------------------------------
+# WAF Middleware: Inspection & IP Block Enforcement
+# Intercepts requests from Mobile Apps, Browsers, & APIs
+# --------------------------------------------------------
+SQLI_PATTERNS = [
+    r"(\%27|\'|\-\-|\%23|#)",
+    r"\b(SELECT|INSERT|DELETE|UPDATE|DROP|UNION|ALTER|CREATE|EXEC)\b",
+    r"\bOR\b\s+[\'\"]?\d+[\'\"]?\s*=\s*[\'\"]?\d+",
+]
+
+@app.before_request
+def inspect_incoming_traffic():
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+
+    # 1. Enforce Firewall Blocklist
+    if _blocker and _blocker.is_blocked(client_ip):
+        return jsonify({
+            "status": "error",
+            "message": f"ACCESS DENIED: IP {client_ip} has been blocked by IDS Firewall.",
+            "blocked": True
+        }), 403
+
+    # Skip internal static files
+    if request.path.startswith("/static"):
+        return
+
+    # 2. Inspect for SQL Injection payloads in URL, headers, or body
+    raw_query    = request.query_string.decode("utf-8", errors="ignore")
+    raw_body     = request.get_data(as_text=True) or ""
+    full_payload = f"{request.path}?{raw_query} {raw_body}"
+
+    found_sqli = False
+    for pat in SQLI_PATTERNS:
+        if re.search(pat, full_payload, re.IGNORECASE):
+            found_sqli = True
+            break
+
+    if found_sqli:
+        print(f"[WAF DETECT] SQL Injection attempt from {client_ip} -> {request.path}")
+        # Send alert packet to UDP correlator
+        try:
+            alert_pkt = {
+                "id":          int(time.time() * 1000),
+                "timestamp":   datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "type":        "SNORT_SIGNATURE",
+                "severity":    "HIGH",
+                "src_ip":      client_ip,
+                "dst_ip":      request.host.split(":")[0],
+                "protocol":    "HTTP",
+                "packet_size": len(full_payload),
+                "packet_rate": 1,
+                "confidence":  98.0,
+                "message":     f"SQL Injection detected from {client_ip} on {request.path}",
+            }
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.sendto(json.dumps(alert_pkt).encode("utf-8"), ("127.0.0.1", 9999))
+            s.close()
+        except Exception as _err:
+            print(f"[WAF DETECT] Correlator alert send error: {_err}")
 
 
 # --------------------------------------------------------
@@ -259,15 +322,17 @@ def api_alerts():
 @app.route("/api/stats")
 @login_required
 def api_stats():
-    """Read from tiny count.json for instant response."""
-    if os.path.exists(COUNT_FILE):
-        try:
-            with open(COUNT_FILE, "r") as f:
-                return jsonify(json.load(f))
-        except Exception:
-            pass
-    # Fallback: compute from full alerts
-    return jsonify(compute_stats(load_alerts()))
+    """Compute live stats directly from alerts."""
+    alerts = load_alerts()
+    stats  = compute_stats(alerts)
+    # Save updated stats to count.json
+    try:
+        os.makedirs(os.path.dirname(COUNT_FILE), exist_ok=True)
+        with open(COUNT_FILE, "w") as f:
+            json.dump(stats, f)
+    except Exception:
+        pass
+    return jsonify(stats)
 
 
 @app.route("/api/clear", methods=["POST"])

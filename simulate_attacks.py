@@ -25,7 +25,7 @@ import time
 import random
 import sys
 
-UDP_IP   = "127.0.0.1"
+UDP_IP   = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
 UDP_PORT = 9999
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

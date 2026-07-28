@@ -32,7 +32,7 @@ _blockchain = AttackerBlockchain()
 
 ALERTS_JSON = os.path.join(BASE_DIR, "alerts", "alerts.json")
 COUNT_JSON  = os.path.join(BASE_DIR, "alerts", "count.json")
-UDP_IP = "127.0.0.1"
+UDP_IP = "0.0.0.0"
 UDP_PORT = 9999
 CORRELATION_WINDOW = 0.5  # seconds
 

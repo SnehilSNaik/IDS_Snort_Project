@@ -1,11 +1,1 @@
-[
-  {
-    "ip": "45.33.32.156",
-    "reason": "Blocked from Blockchain Ledger",
-    "blocked_by": "snehilsnaik",
-    "blocked_at": "2026-07-24 01:02:49",
-    "severity": "HIGH",
-    "attack_type": "UNKNOWN",
-    "firewall_rule": true
-  }
-]
+[]
