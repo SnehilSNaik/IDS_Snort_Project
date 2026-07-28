@@ -27,8 +27,8 @@ import os
 # =============================================================
 # CONFIGURATION  <-- Fill these in
 # =============================================================
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
-TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID",   "YOUR_CHAT_ID_HERE")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8963389940:AAGrTYIpOmS4kY2Qi4_r0II9FNcwoneHwsU")
+TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID",   "2139911624")
 # =============================================================
 
 # Only alert on these severities (set to ["HIGH"] to reduce noise)
