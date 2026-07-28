@@ -950,7 +950,7 @@
             <th>Severity</th>
             <th>Protocol</th>
             <th>Source IP</th>
-            <th>Dest IP</th>
+            <th>Dest IP / Source</th>
             <th>Size</th>
             <th>Rate</th>
             <th>Confidence</th>
@@ -1215,6 +1215,19 @@
       tr.style.animation = 'fadeIn 0.4s ease-out forwards';
       const isBlocked = blockedIPs.has(alert.src_ip);
       if (isBlocked) tr.classList.add('row-blocked');
+
+      // Reported-by badge
+      const reportedBy = alert.reported_by || 'DIRECT';
+      const victimName = alert.victim_name || '';
+      let sourceBadge = '';
+      if (reportedBy === 'VICTIM_AGENT') {
+        sourceBadge = `<br><span style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:0.4px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.4);color:#6366f1;">&#x1F4E1; ${victimName || 'VICTIM'}</span>`;
+      } else if (reportedBy === 'WAF') {
+        sourceBadge = `<br><span style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:0.4px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);color:#d97706;">&#x1F6E1;&#xFE0F; WAF</span>`;
+      } else {
+        sourceBadge = `<br><span style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:0.4px;background:rgba(5,150,105,0.10);border:1px solid rgba(5,150,105,0.35);color:#059669;">&#x1F5A5; DIRECT</span>`;
+      }
+
       tr.innerHTML = `
         <td>${alert.timestamp}</td>
         <td><span class="sev-badge sev-${alert.severity}">${alert.severity}</span></td>
@@ -1223,7 +1236,7 @@
           ${alert.src_ip}
           ${isBlocked ? '<span class="blocked-badge">&#x1F6AB; Blocked</span>' : ''}
         </td>
-        <td class="ip-col">${alert.dst_ip}</td>
+        <td class="ip-col">${alert.dst_ip}${sourceBadge}</td>
         <td>${alert.packet_size} B</td>
         <td>${alert.packet_rate} pps</td>
         <td class="confidence-cell">
