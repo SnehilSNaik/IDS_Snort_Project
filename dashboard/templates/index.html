@@ -296,6 +296,47 @@
       padding: 1px; /* border hack for gradients */
     }
 
+    /* Scrollable table body — fixed height, sticky header */
+    .table-scroll {
+      max-height: 420px;
+      overflow-y: auto;
+      overflow-x: auto;
+      border-radius: 12px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(99,102,241,0.35) transparent;
+    }
+    .table-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .table-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .table-scroll::-webkit-scrollbar-thumb {
+      background: rgba(99,102,241,0.4);
+      border-radius: 3px;
+    }
+    .table-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgba(99,102,241,0.7);
+    }
+    /* Sticky column headers inside scrollable container */
+    .table-scroll thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #f0f2ff;
+      box-shadow: 0 2px 4px rgba(99,102,241,0.08);
+    }
+    /* Scroll hint fade at bottom */
+    .scroll-hint {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      padding: 6px 0 2px;
+      letter-spacing: 0.5px;
+      opacity: 0.7;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -943,6 +984,7 @@
     </div>
 
     <div class="glass-panel table-wrapper fade-in" style="animation-delay: 0.25s;">
+      <div class="table-scroll">
       <table>
         <thead>
           <tr>
@@ -962,6 +1004,8 @@
           <!-- populated by js -->
         </tbody>
       </table>
+      </div>
+      <div class="scroll-hint">&#x25BC; scroll for more alerts</div>
       <div id="empty-state" class="empty-msg" style="display:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
         <span>No threats detected. Radar is clear.</span>
@@ -1082,6 +1126,7 @@
       </h2>
     </div>
     <div class="glass-panel table-wrapper fade-in" style="animation-delay: 0.45s;">
+      <div class="table-scroll" style="max-height: 320px;">
       <table class="bc-table">
         <thead><tr>
           <th>#</th><th>Attacker IP</th><th>Hit Count</th>
@@ -1092,6 +1137,8 @@
           <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px;">Loading...</td></tr>
         </tbody>
       </table>
+      </div>
+      <div class="scroll-hint">&#x25BC; scroll for more attackers</div>
     </div>
 
 
@@ -1136,6 +1183,7 @@
 
         updateStats(statsData);
         updateAlerts(alertsData.alerts);
+        updateScrollHints();
 
         document.getElementById('last-updated').textContent = 'Live Sync: ' + new Date().toLocaleTimeString();
 
@@ -1208,6 +1256,19 @@
       for (let i = nodesToAdd.length - 1; i >= 0; i--) {
         tbody.prepend(nodesToAdd[i]);
       }
+
+      // Scroll to top to show newest alert
+      const scrollEl = tbody.closest('.table-scroll');
+      if (scrollEl && nodesToAdd.length > 0) scrollEl.scrollTop = 0;
+    }
+
+    function updateScrollHints() {
+      document.querySelectorAll('.table-scroll').forEach(el => {
+        const hint = el.nextElementSibling;
+        if (hint && hint.classList.contains('scroll-hint')) {
+          hint.style.display = el.scrollHeight > el.clientHeight ? '' : 'none';
+        }
+      });
     }
 
     function createRow(alert) {
