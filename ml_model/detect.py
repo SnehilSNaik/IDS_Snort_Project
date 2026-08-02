@@ -318,7 +318,7 @@ def check_icmp_flood(src_ip, dst_ip, packet_size, now):
         "packet_size": 0,
         "packet_rate": ping_rate,
         "confidence":  confidence,
-        "message":     f"🔴 ICMP Ping Flood from {src_ip} ({count} pings/{ICMP_FLOOD_WINDOW}s)",
+        "message":     f"[!] ICMP Ping Flood from {src_ip} ({count} pings/{ICMP_FLOOD_WINDOW}s)",
     }
 
     save_alert(alert)

@@ -170,10 +170,29 @@ class AttackerBlockchain:
             print(f"[BLOCKCHAIN] Loaded {len(self._chain)} block(s) from disk.")
 
     def _append_to_file(self, block: Block) -> None:
-        """Append a single block as one JSON line — NEVER rewrites the file."""
+        """Append a single block as one JSON line.
+        MUST be called while self._lock is already held by the caller.
+        Uses an atomic tmp-file write + os.replace() to prevent partial-write
+        corruption when multiple threads (correlator + dashboard) commit blocks.
+        """
         os.makedirs(os.path.dirname(CHAIN_FILE), exist_ok=True)
-        with open(CHAIN_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(block.to_dict(), separators=(",", ":")) + "\n")
+        # Atomic append: write to .tmp then rename over, preserving existing lines
+        tmp = CHAIN_FILE + ".tmp"
+        try:
+            # Copy existing chain to tmp, then append the new block
+            if os.path.exists(CHAIN_FILE):
+                import shutil
+                shutil.copy2(CHAIN_FILE, tmp)
+            with open(tmp, "a", encoding="utf-8") as f:
+                f.write(json.dumps(block.to_dict(), separators=(",", ":")) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, CHAIN_FILE)
+        except Exception as e:
+            print(f"[BLOCKCHAIN] Warning: could not persist block: {e}")
+            # Fallback: direct append (no atomic guarantee, but won't lose data)
+            with open(CHAIN_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(block.to_dict(), separators=(",", ":")) + "\n")
 
     # ------------------------------------------------------------------
     # Genesis

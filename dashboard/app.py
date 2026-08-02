@@ -64,8 +64,8 @@ except Exception as _fw_err:
     print(f"[DASHBOARD] IP Blocker unavailable: {_fw_err}")
 
 
-ALERTS_FILE  = os.path.join(os.path.dirname(__file__), "../alerts/alerts.json")
-COUNT_FILE   = os.path.join(os.path.dirname(__file__), "../alerts/count.json")
+ALERTS_FILE  = os.path.join(BASE_DIR, "alerts", "alerts.json")
+COUNT_FILE   = os.path.join(BASE_DIR, "alerts", "count.json")
 USERS_FILE   = os.path.join(os.path.dirname(__file__), "users.json")
 
 # Global list to track running background engines
@@ -100,7 +100,11 @@ def inspect_incoming_traffic():
 
     # 2. Inspect for SQL Injection payloads in URL, headers, or body
     raw_query    = request.query_string.decode("utf-8", errors="ignore")
-    raw_body     = request.get_data(as_text=True) or ""
+
+    # Skip body inspection on auth form POSTs to prevent false positives
+    # on password fields that may contain SQL-like keywords
+    auth_post = request.method == "POST" and request.path in ("/login", "/signup")
+    raw_body     = "" if auth_post else (request.get_data(as_text=True) or "")
     full_payload = f"{request.path}?{raw_query} {raw_body}"
 
     found_sqli = False
@@ -407,8 +411,6 @@ def api_stop_engine():
     try:
         _stop_all_processes()
         return jsonify({"status": "ok", "message": "IDS Engine stopped."})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

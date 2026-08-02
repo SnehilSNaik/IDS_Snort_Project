@@ -35,6 +35,7 @@ class IPBlocker:
     def __init__(self):
         self._lock = threading.Lock()
         self._blocked: dict[str, dict] = {}   # ip -> entry dict
+        self._file_mtime: float = 0.0          # mtime of last successful load
         self._load()
 
     # ------------------------------------------------------------------
@@ -43,16 +44,34 @@ class IPBlocker:
     def _load(self):
         if not os.path.exists(BLOCKED_IPS_FILE):
             self._blocked = {}
+            self._file_mtime = 0.0
             return
         try:
             with open(BLOCKED_IPS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             # Keyed by IP for O(1) lookup
             self._blocked = {entry["ip"]: entry for entry in data}
+            self._file_mtime = os.path.getmtime(BLOCKED_IPS_FILE)
             print(f"[FIREWALL] Loaded {len(self._blocked)} blocked IP(s) from disk.")
         except Exception as e:
             print(f"[FIREWALL] Warning: could not load blocked IPs: {e}")
             self._blocked = {}
+            self._file_mtime = 0.0
+
+    def _reload_if_stale(self) -> None:
+        """Reload from disk if blocked_ips.json was modified externally.
+        Called at the top of every read method so Flask's in-memory
+        _blocker instance stays in sync with disk changes made by the
+        correlator or other processes.
+        """
+        if not os.path.exists(BLOCKED_IPS_FILE):
+            return
+        try:
+            mtime = os.path.getmtime(BLOCKED_IPS_FILE)
+            if mtime > self._file_mtime:
+                self._load()
+        except OSError:
+            pass
 
     def _save(self):
         try:
@@ -162,10 +181,12 @@ class IPBlocker:
 
     def is_blocked(self, ip: str) -> bool:
         with self._lock:
+            self._reload_if_stale()
             return ip in self._blocked
 
     def get_entry(self, ip: str) -> dict | None:
         with self._lock:
+            self._reload_if_stale()
             return self._blocked.get(ip)
 
     def get_all(self) -> list[dict]:

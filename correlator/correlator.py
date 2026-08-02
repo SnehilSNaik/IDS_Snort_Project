@@ -20,6 +20,8 @@ import json
 import time
 import socket
 import threading
+from collections import deque
+from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
@@ -38,7 +40,7 @@ UDP_PORT = 9999
 CORRELATION_WINDOW = 0.5  # seconds
 
 lock = threading.Lock()
-alerts_list = []
+alerts_list: deque = deque(maxlen=500)   # O(1) left-eviction when full
 ip_cache    = {}
 # Per-severity packet tick counters — all four dashboard numbers derive from these
 tick_high   = 0
@@ -82,7 +84,7 @@ def save_alerts():
         os.makedirs(os.path.dirname(ALERTS_JSON), exist_ok=True)
         temp = ALERTS_JSON + ".tmp"
         with open(temp, "w") as f:
-            json.dump(alerts_list, f)          # no indent = smaller/faster
+            json.dump(list(alerts_list), f)    # cast deque → list for JSON serialization
         os.replace(temp, ALERTS_JSON)
     except Exception as e:
         print(f"[CORRELATOR] Warning: could not save alerts: {e}")
@@ -130,7 +132,11 @@ def process_alert(new_alert):
     src_ip = new_alert.get("src_ip", "0.0.0.0")
     engine = new_alert.get("type", "UNKNOWN")
     now    = time.time()
-    
+
+    # Auto-assign timestamp if missing — prevents sorting failures in dashboard
+    if not new_alert.get("timestamp"):
+        new_alert["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     with lock:
         cache = ip_cache.get(src_ip, {})
         other_engine = "ML_ANOMALY" if engine == "SNORT_SIGNATURE" else "SNORT_SIGNATURE"
