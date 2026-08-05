@@ -181,7 +181,9 @@ def load_alerts():
         try:
             with open(ALERTS_FILE, "r") as f:
                 data = json.load(f)
-            return sorted(data, key=lambda x: x.get("timestamp", ""), reverse=True)
+            # Strip heartbeat pings — they are not attack alerts
+            attack_alerts = [a for a in data if a.get("type") != "HEARTBEAT"]
+            return sorted(attack_alerts, key=lambda x: x.get("timestamp", ""), reverse=True)
         except (json.JSONDecodeError, ValueError):
             return []
         except OSError:
@@ -193,6 +195,32 @@ def load_alerts():
 # Helper: compute stats
 # --------------------------------------------------------
 def compute_stats(alerts):
+    # Try reading pre-computed counts from correlator's count.json first
+    if os.path.exists(COUNT_FILE):
+        try:
+            with open(COUNT_FILE, "r") as f:
+                cached = json.load(f)
+            # Recompute protocols and avg_confidence from live alert list
+            protocols = {}
+            for a in alerts:
+                p = a.get("protocol", "Unknown")
+                protocols[p] = protocols.get(p, 0) + 1
+            avg_confidence = (
+                round(sum(a.get("confidence", 0) for a in alerts) / max(len(alerts), 1), 1)
+                if alerts else 0
+            )
+            return {
+                "total":          cached.get("total", len(alerts)),
+                "high":           cached.get("high", 0),
+                "medium":         cached.get("medium", 0),
+                "low":            cached.get("low", 0),
+                "protocols":      protocols,
+                "avg_confidence": avg_confidence,
+            }
+        except Exception:
+            pass
+
+    # Fallback: compute from alert list directly
     total  = len(alerts)
     high   = sum(1 for a in alerts if a.get("severity") == "HIGH")
     medium = sum(1 for a in alerts if a.get("severity") == "MEDIUM")

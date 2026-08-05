@@ -32,7 +32,7 @@ from datetime import datetime
 # =============================================================
 # CONFIGURATION  <-- Edit these for each victim PC
 # =============================================================
-MONITOR_PC_IP = "172.27.52.91"   # HP Monitoring PC's local IP
+MONITOR_PC_IP = "172.20.10.3"    # HP Monitoring PC's local IP
 MONITOR_PORT  = 9999              # HP Correlator UDP port
 VICTIM_NAME   = "PC-Lab-02"      # Label shown on HP dashboard
 HTTP_TRAP_PORT = 8888             # Local HTTP honeypot port (optional)

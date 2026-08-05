@@ -111,7 +111,9 @@ def load_alerts():
     if os.path.exists(ALERTS_JSON):
         try:
             with open(ALERTS_JSON, "r") as f:
-                alerts_list = json.load(f)
+                raw = json.load(f)
+            # Strip any stale HEARTBEAT entries persisted before the filter was added
+            alerts_list = [a for a in raw if a.get("type") != "HEARTBEAT"]
         except Exception:
             alerts_list = []
     else:
@@ -132,9 +134,13 @@ def save_alerts():
 
 
 def save_count():
-    """Write a tiny JSON with consistent counts — all derived from severity ticks."""
+    """Write a tiny JSON with consistent counts derived directly from active alerts."""
     try:
-        total = tick_high + tick_medium + tick_low
+        high = sum(1 for a in alerts_list if a.get("severity") == "HIGH")
+        medium = sum(1 for a in alerts_list if a.get("severity") == "MEDIUM")
+        low = sum(1 for a in alerts_list if a.get("severity") == "LOW")
+        total = len(alerts_list)
+
         # Build protocol distribution from current alerts
         protocols = {}
         for a in alerts_list:
@@ -142,9 +148,9 @@ def save_count():
             protocols[p] = protocols.get(p, 0) + 1
         counts = {
             "total":  total,
-            "high":   tick_high,
-            "medium": tick_medium,
-            "low":    tick_low,
+            "high":   high,
+            "medium": medium,
+            "low":    low,
             "avg_confidence": round(
                 sum(a.get("confidence", 0) for a in alerts_list) / max(len(alerts_list), 1), 1
             ),
@@ -160,6 +166,10 @@ def save_count():
 
 def process_alert(new_alert):
     global alerts_list, tick_high, tick_medium, tick_low
+
+    # Drop HEARTBEAT pings — they are status signals, not attack alerts
+    if new_alert.get("type") == "HEARTBEAT":
+        return
 
     # Handle lightweight packet ticks — just count by severity, no alert record needed
     if new_alert.get("type") == "PACKET_TICK":
@@ -248,10 +258,15 @@ def process_alert(new_alert):
         ip_cache[src_ip] = cache
         ip_cache[src_ip][engine] = {"time": now, "ref": new_alert}
 
+        # Increment severity counters so dashboard stats stay accurate
+        sev = new_alert.get("severity", "LOW")
+        if   sev == "HIGH":   tick_high   += 1
+        elif sev == "MEDIUM": tick_medium += 1
+        else:                 tick_low    += 1
+
         save_alerts()
 
         # Server-side beep for HIGH / MEDIUM alerts
-        sev = new_alert.get("severity", "LOW")
         if   sev == "HIGH":   _sound_alert('high')
         elif sev == "MEDIUM": _sound_alert('medium')
 
