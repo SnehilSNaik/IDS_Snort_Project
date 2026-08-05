@@ -326,16 +326,21 @@ def api_alerts():
 @app.route("/api/stats")
 @login_required
 def api_stats():
-    """Compute live stats directly from alerts."""
+    """Fast stats: read pre-computed count.json written by correlator."""
+    # Fast path: read tiny count.json maintained by correlator
+    if os.path.exists(COUNT_FILE):
+        try:
+            with open(COUNT_FILE, "r") as f:
+                stats = json.load(f)
+            # Ensure all expected keys exist
+            for k in ("total", "high", "medium", "low", "avg_confidence"):
+                stats.setdefault(k, 0)
+            return jsonify(stats)
+        except (json.JSONDecodeError, OSError):
+            pass
+    # Fallback: compute from alerts (slower, used only on first load)
     alerts = load_alerts()
     stats  = compute_stats(alerts)
-    # Save updated stats to count.json
-    try:
-        os.makedirs(os.path.dirname(COUNT_FILE), exist_ok=True)
-        with open(COUNT_FILE, "w") as f:
-            json.dump(stats, f)
-    except Exception:
-        pass
     return jsonify(stats)
 
 

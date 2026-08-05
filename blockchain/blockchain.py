@@ -240,6 +240,28 @@ class AttackerBlockchain:
             )
             return new_blk
 
+    def reset_chain(self) -> Block:
+        """
+        Wipe the entire chain and start fresh with a new Genesis block.
+        ⚠️  DESTRUCTIVE — all past attacker records are permanently deleted.
+        Thread-safe: acquires lock before touching disk or in-memory chain.
+        Returns the new Genesis block.
+        """
+        with self._lock:
+            # Atomically replace chain.json with a fresh genesis-only file
+            genesis = self._make_genesis()
+            tmp = CHAIN_FILE + ".tmp"
+            os.makedirs(os.path.dirname(CHAIN_FILE), exist_ok=True)
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(json.dumps(genesis.to_dict(), separators=(",", ":")) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, CHAIN_FILE)
+            self._chain = [genesis]
+            print(f"[BLOCKCHAIN] ⚠️  Chain RESET — new Genesis block created (hash={genesis.hash[:16]}...)")
+            return genesis
+
+
     def is_chain_valid(self) -> tuple[bool, int]:
         """
         Verify the entire chain.

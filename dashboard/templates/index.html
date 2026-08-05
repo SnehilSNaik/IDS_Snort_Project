@@ -882,6 +882,28 @@
     }
     .row-blocked:hover { background: rgba(225,29,72,0.08) !important; }
 
+    /* ---- Sound Mute Toggle ---- */
+    .btn-mute {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1.5px solid var(--glass-border);
+      background: var(--bg-panel);
+      color: var(--text-muted);
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-mute:hover { border-color: #2563eb; color: #2563eb; background: rgba(37,99,235,0.06); }
+    .btn-mute.muted { border-color: #e11d48; color: #e11d48; background: rgba(225,29,72,0.06); }
+    .btn-mute svg { transition: transform 0.2s; }
+    .btn-mute:hover svg { transform: scale(1.1); }
+
   </style>
 </head>
 <body>
@@ -915,6 +937,21 @@
             <div class="user-avatar" id="user-avatar-initial">{{ username[0]|upper if username else 'U' }}</div>
             <span class="user-name">{{ username }}</span>
           </div>
+
+          <!-- Sound Mute Toggle -->
+          <button id="btn-mute" class="btn-mute" onclick="IDS_Sound.toggleMute()" title="Toggle alert sounds">
+            <svg id="mute-icon-on" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+            <svg id="mute-icon-off" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <line x1="23" y1="9" x2="17" y2="15"/>
+              <line x1="17" y1="9" x2="23" y2="15"/>
+            </svg>
+            <span id="mute-label">Sound ON</span>
+          </button>
 
           <!-- Logout -->
           <form method="POST" action="/logout" style="margin:0;">
@@ -1235,26 +1272,40 @@
 
       const newIds = new Set(alerts.map(a => a.id));
       const shouldRerenderAll = existingAlertIds.size === 0 || alerts.length < existingAlertIds.size;
-      
+
       if (shouldRerenderAll) {
-         tbody.innerHTML = '';
-         alerts.forEach(alert => {
-           tbody.appendChild(createRow(alert));
-         });
-         existingAlertIds = newIds;
-         return;
+        tbody.innerHTML = '';
+        alerts.forEach(alert => { tbody.appendChild(createRow(alert)); });
+        existingAlertIds = newIds;
+        return;
       }
 
       let nodesToAdd = [];
+      let highestNewSev = null;   // track worst severity among new arrivals
+      let hasCorrelated = false;
       for (const alert of alerts) {
         if (!existingAlertIds.has(alert.id)) {
           nodesToAdd.push(createRow(alert));
           existingAlertIds.add(alert.id);
+          // Track severity for sound decision
+          const sev = alert.severity || '';
+          const typ = alert.type    || '';
+          if (typ === 'CORRELATED_ATTACK')                      hasCorrelated = true;
+          if (typ === 'CORRELATED_ATTACK' || sev === 'HIGH')    highestNewSev = 'HIGH';
+          else if (sev === 'MEDIUM' && highestNewSev !== 'HIGH') highestNewSev = 'MEDIUM';
+          else if (sev === 'LOW'    && !highestNewSev)           highestNewSev = 'LOW';
         }
       }
 
       for (let i = nodesToAdd.length - 1; i >= 0; i--) {
         tbody.prepend(nodesToAdd[i]);
+      }
+
+      // Play alert sound for new arrivals — 3 distinct danger tiers
+      if (nodesToAdd.length > 0) {
+        if      (hasCorrelated)              IDS_Sound.playCorrelated(); // 🔴🔴 Emergency klaxon
+        else if (highestNewSev === 'HIGH')   IDS_Sound.playHigh();       // 🔴 Military siren
+        else if (highestNewSev === 'MEDIUM') IDS_Sound.playMedium();     // 🟡 Radar ping
       }
 
       // Scroll to top to show newest alert
@@ -1383,7 +1434,12 @@
 
     async function sendTestEmail() {}
 
-    // Fast loop: update stats numbers every 200ms (reads tiny count.json)
+    // ── Unified fast polling loop ──────────────────────────
+    // Stats: polls count.json via /api/stats (tiny file, very fast)
+    // Alerts: polls /api/alerts at a slightly slower cadence
+    let _statsTimer  = null;
+    let _alertsTimer = null;
+
     async function fetchStats() {
       try {
         const res  = await fetch('/api/stats', { cache: 'no-store' });
@@ -1393,19 +1449,22 @@
       } catch (err) { /* silent */ }
     }
 
-    // Slower loop: update alert table every 1 second
     async function fetchAlerts() {
       try {
         const res  = await fetch('/api/alerts', { cache: 'no-store' });
         const data = await res.json();
         updateAlerts(data.alerts);
+        updateScrollHints();
       } catch (err) { /* silent */ }
     }
 
+    // Initial fetch immediately on page load
     fetchStats();
     fetchAlerts();
-    setInterval(fetchStats,  200);   // near-instant count updates
-    setInterval(fetchAlerts, 1000);  // table updates every 1s
+    // Stats: every 500ms (reads tiny pre-computed count.json — near-zero server cost)
+    _statsTimer  = setInterval(fetchStats,  500);
+    // Alerts table: every 800ms (faster than before, backend just reads JSON file)
+    _alertsTimer = setInterval(fetchAlerts, 800);
 
     // ================================================================
     // BLOCKCHAIN LEDGER  JS
@@ -1431,6 +1490,7 @@
         } else {
           banner.className = 'chain-status-banner tampered';
           banner.innerHTML = `&#x26A0;&#xFE0F; CHAIN TAMPERED &mdash; Integrity broken at Block #${data.broken_at}`;
+          IDS_Sound.playTamper();   // deep alert pulse on blockchain tamper detection
         }
       } catch(e) {
         banner.innerHTML = '&#x26A0;&#xFE0F; Verification failed: ' + e.message;
@@ -1440,6 +1500,7 @@
     async function loadBlockchainData() {
       await loadBCStats();
     }
+
 
     async function loadBCStats() {
       try {
@@ -1571,6 +1632,7 @@
         const data = await res.json();
         if (data.status === 'ok') {
           showToast('&#x1F6AB; ' + data.message, 'ok');
+          IDS_Sound.playBlock();    // confirmation click on successful block
           blockedIPs.add(ip);
           loadBlockedIPs();
           // Trigger full alert re-render to update block buttons
@@ -1609,6 +1671,237 @@
       document.getElementById('fw-manual-ip').value     = '';
       document.getElementById('fw-manual-reason').value = '';
     }
+
+
+    // ================================================================
+    // IDS SOUND ENGINE  (Cinematic Danger Sounds — Web Audio API)
+    // ================================================================
+    const IDS_Sound = (() => {
+      let _ctx = null;
+      let _muted = false;
+
+      function _getCtx() {
+        if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (_ctx.state === 'suspended') _ctx.resume();
+        return _ctx;
+      }
+
+      // ── Distortion waveshaper (makes tones harsh & alarming) ────
+      function _distort(ctx, amount = 100) {
+        const ws = ctx.createWaveShaper();
+        const n = 256, curve = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+          const x = (i * 2) / n - 1;
+          curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+        }
+        ws.curve = curve;
+        ws.oversample = '4x';
+        return ws;
+      }
+
+      // ── White noise burst (static / grit layer) ─────────────────
+      function _noise(delaySec, duration, vol, loFreq = 800, hiFreq = 3000) {
+        if (_muted) return;
+        try {
+          const ctx = _getCtx();
+          const rate = ctx.sampleRate;
+          const buf  = ctx.createBuffer(1, Math.ceil(rate * duration), rate);
+          const d    = buf.getChannelData(0);
+          for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+          const src  = ctx.createBufferSource(); src.buffer = buf;
+          const filt = ctx.createBiquadFilter();
+          filt.type = 'bandpass';
+          filt.frequency.value = (loFreq + hiFreq) / 2;
+          filt.Q.value = 0.6;
+          const gain = ctx.createGain();
+          const t = ctx.currentTime + delaySec;
+          gain.gain.setValueAtTime(0, t);
+          gain.gain.linearRampToValueAtTime(vol, t + 0.008);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+          src.connect(filt); filt.connect(gain); gain.connect(ctx.destination);
+          src.start(t); src.stop(t + duration + 0.05);
+        } catch(e) {}
+      }
+
+      // ── Deep bass thud (explosive low-end punch) ─────────────────
+      function _thud(delaySec, startHz, vol, duration) {
+        if (_muted) return;
+        try {
+          const ctx = _getCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const t = ctx.currentTime + delaySec;
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(startHz, t);
+          osc.frequency.exponentialRampToValueAtTime(startHz * 0.15, t + duration);
+          gain.gain.setValueAtTime(vol, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.start(t); osc.stop(t + duration + 0.05);
+        } catch(e) {}
+      }
+
+      // ── Sweeping siren tone (LFO-driven wail) ───────────────────
+      function _siren(delaySec, centerHz, swingHz, lfoRate, vol, duration, waveType = 'sawtooth', useDistort = true) {
+        if (_muted) return;
+        try {
+          const ctx  = _getCtx();
+          const osc  = ctx.createOscillator();
+          const lfo  = ctx.createOscillator();
+          const lfoG = ctx.createGain();
+          const gain = ctx.createGain();
+          const t = ctx.currentTime + delaySec;
+          osc.type = waveType;
+          osc.frequency.setValueAtTime(centerHz, t);
+          lfo.type = 'sine';
+          lfo.frequency.setValueAtTime(lfoRate, t);
+          lfoG.gain.setValueAtTime(swingHz, t);
+          lfo.connect(lfoG); lfoG.connect(osc.frequency);
+          if (useDistort) {
+            const dist = _distort(ctx, 80);
+            osc.connect(dist); dist.connect(gain);
+          } else {
+            osc.connect(gain);
+          }
+          gain.connect(ctx.destination);
+          gain.gain.setValueAtTime(0, t);
+          gain.gain.linearRampToValueAtTime(vol, t + 0.04);
+          gain.gain.setValueAtTime(vol, t + duration - 0.12);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+          lfo.start(t); osc.start(t);
+          lfo.stop(t + duration + 0.1); osc.stop(t + duration + 0.1);
+        } catch(e) {}
+      }
+
+      // ── Klaxon stab (single sharp harsh burst) ──────────────────
+      function _klaxon(delaySec, freq, vol, duration) {
+        if (_muted) return;
+        try {
+          const ctx  = _getCtx();
+          const osc  = ctx.createOscillator();
+          const dist = _distort(ctx, 150);
+          const gain = ctx.createGain();
+          const t = ctx.currentTime + delaySec;
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(freq, t);
+          osc.connect(dist); dist.connect(gain); gain.connect(ctx.destination);
+          gain.gain.setValueAtTime(0, t);
+          gain.gain.linearRampToValueAtTime(vol, t + 0.010);
+          gain.gain.setValueAtTime(vol, t + duration * 0.7);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+          osc.start(t); osc.stop(t + duration + 0.05);
+        } catch(e) {}
+      }
+
+      return {
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 🔴 HIGH — Military siren + 3 klaxon stabs + bass + noise
+        //    Total duration ≈ 1.5s.  Genuinely alarming wail.
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        playHigh() {
+          if (_muted) return;
+          // Layer 1 — wailing LFO siren (center 600Hz ± 300Hz @ 2.5 cycles/s)
+          _siren(0.00, 600, 300, 2.5, 0.28, 1.4);
+          // Layer 2 — 3 sharp klaxon stabs (alternating pitch for urgency)
+          _klaxon(0.00, 950,  0.24, 0.14);
+          _klaxon(0.18, 750,  0.22, 0.14);
+          _klaxon(0.36, 950,  0.24, 0.14);
+          // Layer 3 — explosive bass thud on each stab
+          _thud(0.00, 90, 0.65, 0.30);
+          _thud(0.18, 80, 0.50, 0.25);
+          _thud(0.36, 90, 0.60, 0.28);
+          // Layer 4 — noise grit bursts
+          _noise(0.00, 0.10, 0.09, 600, 2400);
+          _noise(0.18, 0.10, 0.09, 600, 2400);
+          _noise(0.36, 0.10, 0.09, 600, 2400);
+        },
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 🔴🔴 CORRELATED — Full emergency klaxon (most critical)
+        //    4 rapid hi-lo klaxon pulses + pulsing sub-bass + siren tail
+        //    Total duration ≈ 2.0s.  Classic emergency alarm feel.
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        playCorrelated() {
+          if (_muted) return;
+          // 4 alternating klaxon bursts (hi-lo pattern like a fire alarm)
+          [0, 1, 2, 3].forEach(i => {
+            const d = i * 0.23;
+            _klaxon(d, i % 2 === 0 ? 1050 : 680, 0.30, 0.19);
+            _thud(d, 60, 0.75, 0.22);
+            _noise(d, 0.08, 0.11, 500, 3000);
+          });
+          // Trailing full siren wail
+          _siren(0.92, 700, 350, 3.0, 0.26, 1.0);
+          // Sub-bass rumble throughout
+          _thud(0.00, 45, 0.45, 1.80);
+        },
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 🟡 MEDIUM — Radar ping + warning chirp
+        //    Sharp, urgent but not full alarm. ≈ 0.5s.
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        playMedium() {
+          if (_muted) return;
+          // Sharp radar ping (high-to-mid sweep)
+          _siren(0.00, 1100, 200, 8, 0.22, 0.22, 'sine', false);
+          // Follow-up lower warning chirp
+          _siren(0.25, 650,  80,  6, 0.16, 0.20, 'sine', false);
+          _noise(0.00, 0.06, 0.05, 800, 2500);
+        },
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 🔒 BLOCK — Deep hydraulic thump + metallic clunk
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        playBlock() {
+          if (_muted) return;
+          _thud(0.00, 130, 0.72, 0.28);
+          _thud(0.04, 65,  0.55, 0.32);
+          _noise(0.00, 0.07, 0.13, 200, 900);
+          _klaxon(0.10, 260, 0.12, 0.14);
+        },
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 🔗 TAMPER — Descending horror alarm + static burst
+        //    Falling sawtooth sweep + noise = breach/tamper feel
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        playTamper() {
+          if (_muted) return;
+          // Falling horror sweep
+          _siren(0.00, 750, 350, 1.8, 0.28, 0.75, 'sawtooth', true);
+          // Deep bass drop
+          _thud(0.00, 110, 0.60, 0.55);
+          // Static noise bursts — like a signal being cut
+          _noise(0.00, 0.18, 0.16, 400, 4000);
+          _noise(0.28, 0.15, 0.12, 400, 4000);
+          // Ominous low rumble underneath
+          _siren(0.10, 80, 20, 2, 0.22, 0.80, 'sine', false);
+        },
+
+        // Toggle mute state
+        toggleMute() {
+          _muted = !_muted;
+          const btn     = document.getElementById('btn-mute');
+          const iconOn  = document.getElementById('mute-icon-on');
+          const iconOff = document.getElementById('mute-icon-off');
+          const label   = document.getElementById('mute-label');
+          btn.classList.toggle('muted', _muted);
+          iconOn.style.display  = _muted ? 'none' : '';
+          iconOff.style.display = _muted ? '' : 'none';
+          label.textContent = _muted ? 'Muted' : 'Sound ON';
+          // Soft radar-ping confirm on unmute
+          if (!_muted) _siren(0, 900, 100, 6, 0.10, 0.20, 'sine', false);
+        },
+
+        isMuted: () => _muted
+      };
+    })();
+
+    // Resume AudioContext on first user gesture (browser autoplay policy)
+    document.addEventListener('click', () => {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctx.state === 'suspended') ctx.resume();
+    }, { once: true });
 
   </script>
 </body>

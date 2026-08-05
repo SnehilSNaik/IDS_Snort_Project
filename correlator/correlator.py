@@ -23,6 +23,13 @@ import threading
 from collections import deque
 from datetime import datetime
 
+# Windows system beep (stdlib, no pip install needed)
+try:
+    import winsound as _winsound
+    _HAS_WINSOUND = True
+except ImportError:
+    _HAS_WINSOUND = False   # non-Windows OS — beeps silently skipped
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
@@ -38,14 +45,45 @@ COUNT_JSON  = os.path.join(BASE_DIR, "alerts", "count.json")
 UDP_IP = "0.0.0.0"
 UDP_PORT = 9999
 CORRELATION_WINDOW = 0.5  # seconds
+DEDUP_WINDOW       = 2.0  # seconds — suppress near-identical alerts from same IP+engine+severity
 
 lock = threading.Lock()
 alerts_list: deque = deque(maxlen=500)   # O(1) left-eviction when full
 ip_cache    = {}
+dedup_cache = {}   # (src_ip, engine, severity, protocol) -> last_time
 # Per-severity packet tick counters — all four dashboard numbers derive from these
 tick_high   = 0
 tick_medium = 0
 tick_low    = 0
+
+
+def _sound_alert(alert_type: str) -> None:
+    """
+    Play a system beep on the monitoring PC using winsound (Windows only).
+    Runs in a daemon thread so the UDP listener is never blocked.
+
+    alert_type:
+        'correlated' — 3 rapid high-pitched beeps (most critical)
+        'high'       — single long beep
+        'medium'     — single short soft beep
+    """
+    if not _HAS_WINSOUND:
+        return
+
+    def _beep():
+        try:
+            if alert_type == 'correlated':
+                for freq in (1200, 1000, 800):          # descending urgent triple beep
+                    _winsound.Beep(freq, 180)
+                    time.sleep(0.05)
+            elif alert_type == 'high':
+                _winsound.Beep(880, 350)                # single urgent beep
+            elif alert_type == 'medium':
+                _winsound.Beep(600, 150)                # soft notification beep
+        except Exception:
+            pass
+
+    threading.Thread(target=_beep, daemon=True).start()
 
 
 def _flag_watcher():
@@ -61,6 +99,7 @@ def _flag_watcher():
                 global tick_high, tick_medium, tick_low
                 alerts_list.clear()
                 ip_cache.clear()
+                dedup_cache.clear()
                 tick_high = tick_medium = tick_low = 0
                 save_alerts()
             print("[CORRELATOR] Alert list cleared via dashboard.")
@@ -96,6 +135,11 @@ def save_count():
     """Write a tiny JSON with consistent counts — all derived from severity ticks."""
     try:
         total = tick_high + tick_medium + tick_low
+        # Build protocol distribution from current alerts
+        protocols = {}
+        for a in alerts_list:
+            p = a.get("protocol", "Unknown")
+            protocols[p] = protocols.get(p, 0) + 1
         counts = {
             "total":  total,
             "high":   tick_high,
@@ -104,6 +148,7 @@ def save_count():
             "avg_confidence": round(
                 sum(a.get("confidence", 0) for a in alerts_list) / max(len(alerts_list), 1), 1
             ),
+            "protocols": protocols,
         }
         temp = COUNT_JSON + ".tmp"
         with open(temp, "w") as f:
@@ -145,6 +190,16 @@ def process_alert(new_alert):
         if engine in cache:
             if now - cache[engine]["time"] < CORRELATION_WINDOW:
                 return  # Too soon — drop duplicate
+
+        # Content-based dedup: suppress near-identical alerts
+        # (same src_ip + engine + severity + protocol) within DEDUP_WINDOW
+        sev   = new_alert.get("severity", "LOW")
+        proto = new_alert.get("protocol", "")
+        dedup_key = (src_ip, engine, sev, proto)
+        last_dedup = dedup_cache.get(dedup_key, 0)
+        if now - last_dedup < DEDUP_WINDOW:
+            return  # near-identical alert suppressed
+        dedup_cache[dedup_key] = now
         
         # 2. Check for correlation within 2 seconds
         if other_engine in cache:
@@ -170,6 +225,8 @@ def process_alert(new_alert):
                     save_alerts()
                     print(f"[! CORRELATOR] MATCH FOUND! Merged {src_ip} into CORRELATED_ATTACK (Diff: {time_diff:.2f}s)")
 
+                    _sound_alert('correlated')   # 3 rapid beeps on monitoring PC
+
                     # Commit correlated attack permanently to blockchain
                     threading.Thread(
                         target=_blockchain.add_block,
@@ -186,13 +243,17 @@ def process_alert(new_alert):
 
         # 3. No match found within window. Add as separate alert.
         alerts_list.append(new_alert)
-        if len(alerts_list) > 500:   # keep list small for fast JSON writes
-            alerts_list.pop(0)
+        # deque(maxlen=500) auto-evicts oldest entry — no manual size check needed
 
         ip_cache[src_ip] = cache
         ip_cache[src_ip][engine] = {"time": now, "ref": new_alert}
 
         save_alerts()
+
+        # Server-side beep for HIGH / MEDIUM alerts
+        sev = new_alert.get("severity", "LOW")
+        if   sev == "HIGH":   _sound_alert('high')
+        elif sev == "MEDIUM": _sound_alert('medium')
 
         # Commit every new alert permanently to the blockchain ledger
         threading.Thread(
