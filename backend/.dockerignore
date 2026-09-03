@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+.env
+ml_model/dataset/
+packet_capture/captured_packets.csv

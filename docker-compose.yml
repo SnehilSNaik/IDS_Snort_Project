@@ -1,0 +1,41 @@
+services:
+  dashboard:
+    build: ./backend
+    command: python dashboard/app.py
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend/alerts:/app/alerts
+      - ./backend/response:/app/response
+      - ./backend/firewall:/app/firewall
+      - ./backend/endpoints:/app/endpoints
+    environment:
+      - IDS_SECRET_KEY=${IDS_SECRET_KEY:-change-this-before-any-non-demo-use}
+
+  correlator:
+    build: ./backend
+    command: python correlator/correlator.py
+    ports:
+      - "9999:9999/udp"
+    volumes:
+      - ./backend/alerts:/app/alerts
+      - ./backend/response:/app/response
+      - ./backend/firewall:/app/firewall
+      - ./backend/endpoints:/app/endpoints
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      - VITE_API_PROXY=http://dashboard:5000
+    depends_on:
+      - dashboard
+
+volumes:
+  frontend_node_modules:

@@ -1,0 +1,74 @@
+[
+  {
+    "ip": "77.88.55.66",
+    "reason": "Blocked from Live Alert",
+    "blocked_by": "snehilsnaik",
+    "blocked_at": "2026-08-06 12:41:51",
+    "severity": "MEDIUM",
+    "attack_type": "ML_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "185.220.101.47",
+    "reason": "PB-001 (Auto-Block Correlated Attack): CORRELATED_ATTACK/HIGH/99.0% from 185.220.101.47",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-08-12 18:59:25",
+    "severity": "HIGH",
+    "attack_type": "CORRELATED_ATTACK",
+    "firewall_rule": true
+  },
+  {
+    "ip": "198.235.24.44",
+    "reason": "Threat score 10 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-08-12 18:59:28",
+    "severity": "HIGH",
+    "attack_type": "ML_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "45.33.32.156",
+    "reason": "Threat score 10 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-08-12 19:03:22",
+    "severity": "HIGH",
+    "attack_type": "SNORT_SIGNATURE",
+    "firewall_rule": true
+  },
+  {
+    "ip": "92.118.160.4",
+    "reason": "PB-005 (Block DNS Tunnel): DNS_TUNNEL/HIGH/90.0% from 92.118.160.4",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-08-12 19:03:34",
+    "severity": "HIGH",
+    "attack_type": "DNS_TUNNEL",
+    "firewall_rule": true
+  },
+  {
+    "ip": "198.51.100.77",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-08-14 00:03:48",
+    "severity": "HIGH",
+    "attack_type": "TEST_HIGH_ATTACK",
+    "firewall_rule": true
+  },
+  {
+    "ip": "172.20.10.1",
+    "reason": "PB-005 (Block DNS Tunnel): DNS_TUNNEL/HIGH/85.0% from 172.20.10.1",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-01 17:33:59",
+    "severity": "HIGH",
+    "attack_type": "DNS_TUNNEL",
+    "firewall_rule": true
+  },
+  {
+    "ip": "172.20.10.3",
+    "reason": "PB-005 (Block DNS Tunnel): DNS_TUNNEL/HIGH/90.0% from 172.20.10.3",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-01 18:20:56",
+    "severity": "HIGH",
+    "attack_type": "DNS_TUNNEL",
+    "firewall_rule": true
+  }
+]

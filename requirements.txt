@@ -1,8 +1,0 @@
-# IDS Project — Python Dependencies
-# Install with: pip install -r requirements.txt
-
-flask>=2.3.0
-scapy>=2.5.0
-scikit-learn>=1.3.0
-pandas>=2.0.0
-numpy>=1.24.0

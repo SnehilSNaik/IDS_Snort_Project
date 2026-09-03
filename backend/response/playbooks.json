@@ -1,0 +1,55 @@
+[
+  {
+    "id": "PB-001",
+    "name": "Auto-Block Correlated Attack",
+    "description": "Automatically blocks the attacker IP when both Snort signature AND ML anomaly fire for the same source within the correlation window.",
+    "trigger_type": "CORRELATED_ATTACK",
+    "trigger_severity": "HIGH",
+    "trigger_confidence_min": 99.0,
+    "actions": ["block_ip", "telegram_alert", "incident_log"],
+    "enabled": true
+  },
+  {
+    "id": "PB-002",
+    "name": "Block High-Confidence LSTM Threat",
+    "description": "Blocks an IP only when the locally trained LSTM Autoencoder reports a high-confidence anomaly.",
+    "trigger_type": "LSTM_ANOMALY",
+    "trigger_severity": "ANY",
+    "trigger_confidence_min": 90.0,
+    "actions": ["block_ip", "email_alert", "incident_log"],
+    "enabled": true
+  },
+  {
+    "id": "PB-005",
+    "name": "Block DNS Tunnel",
+    "description": "Automatically blocks the source IP when a DNS tunneling attempt is detected.",
+    "trigger_type": "DNS_TUNNEL",
+    "trigger_severity": "HIGH",
+    "trigger_confidence_min": 85.0,
+    "actions": ["block_ip", "email_alert", "incident_log"],
+    "enabled": true
+  },
+  {
+    "id": "PB-006",
+    "name": "Threat Score Auto-Quarantine",
+    "description": "Blocks IP automatically when its cumulative threat score reaches or exceeds the quarantine threshold (default: 10).",
+    "trigger_type": "THREAT_SCORE_EXCEEDED",
+    "trigger_severity": "ANY",
+    "trigger_confidence_min": 0.0,
+    "quarantine_threshold": 10,
+    "actions": ["block_ip", "telegram_alert", "email_alert", "incident_log"],
+    "enabled": true
+  },
+  {
+    "id": "PB-007",
+    "name": "Repeat High-Severity Snort Block",
+    "description": "Blocks IP if Snort priority-1 rule fires 3+ times for same IP within 60 seconds.",
+    "trigger_type": "SNORT_SIGNATURE",
+    "trigger_severity": "HIGH",
+    "trigger_confidence_min": 95.0,
+    "trigger_repeat_count": 3,
+    "trigger_repeat_window": 60,
+    "actions": ["block_ip", "incident_log"],
+    "enabled": true
+  }
+]

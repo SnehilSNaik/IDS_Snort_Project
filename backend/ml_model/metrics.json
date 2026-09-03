@@ -1,0 +1,35 @@
+{
+  "status": "ok",
+  "model": "RandomForestClassifier",
+  "mode": "cicids2017",
+  "dataset_samples": 841230,
+  "test_samples": 168246,
+  "accuracy": 99.52,
+  "precision": 99.79,
+  "recall": 99.02,
+  "f1": 99.4,
+  "confusion_matrix": {
+    "tn": 100805,
+    "fp": 143,
+    "fn": 662,
+    "tp": 66636
+  },
+  "features": [
+    "Destination Port",
+    "Flow Duration",
+    "Total Fwd Packets",
+    "Total Length of Fwd Packets",
+    "Fwd Packet Length Max",
+    "Fwd Packet Length Mean",
+    "Fwd Packet Length Std",
+    "Flow Bytes/s",
+    "Flow Packets/s",
+    "Fwd IAT Mean",
+    "Average Packet Size",
+    "SYN Flag Count",
+    "PSH Flag Count",
+    "ACK Flag Count",
+    "Init_Win_bytes_forward"
+  ],
+  "trained_at": "2026-09-02 00:38:28"
+}

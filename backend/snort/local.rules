@@ -1,0 +1,190 @@
+# ============================================================
+# Custom Snort Rules — IDS_Snort_Project
+# ============================================================
+# Place this file at:  C:\Snort\rules\local.rules
+# HOME_NET is set in ids_project.conf (192.168.1.0/24)
+# ============================================================
+# 30+ rules covering:
+#   - ICMP Floods & Pings
+#   - TCP/UDP Anomalies
+#   - Port Scanning (SYN, XMAS, NULL, FIN)
+#   - Brute Force (SSH, FTP, RDP, Telnet, HTTP)
+#   - Web Attacks (SQL Injection, XSS, Directory Traversal)
+#   - DNS Attacks (Zone Transfer, Tunneling)
+#   - DoS / DDoS Patterns
+#   - SMB / Windows Exploits
+#   - Shellshock / CVE Exploits
+#   - Suspicious Protocols & Payloads
+# ============================================================
+
+
+# ──────────────────────────────────────────────────────────────
+# 1. ICMP ATTACKS
+# ──────────────────────────────────────────────────────────────
+
+# ICMP Ping Flood — 10+ pings/sec from same source
+alert icmp any any -> any any (msg:"ICMP Ping Flood Detected"; itype:8; detection_filter: track by_src, count 10, seconds 1; priority:1; sid:1000001; rev:3;)
+
+# ICMP Large Packet (Ping of Death) — oversized ICMP payload
+alert icmp any any -> any any (msg:"ICMP Ping of Death - Oversized Packet"; itype:8; dsize:>1000; priority:1; sid:1000007; rev:1;)
+
+# External ICMP Ping — single ping from outside (informational)
+alert icmp any any -> any any (msg:"External ICMP Ping Detected"; itype:8; priority:3; sid:1000006; rev:3;)
+
+# ICMP Timestamp Request — reconnaissance
+alert icmp any any -> any any (msg:"ICMP Timestamp Request - Reconnaissance"; itype:13; priority:2; sid:1000008; rev:1;)
+
+# ICMP Address Mask Request — network mapping
+alert icmp any any -> any any (msg:"ICMP Address Mask Request - Network Mapping"; itype:17; priority:2; sid:1000009; rev:1;)
+
+
+# ──────────────────────────────────────────────────────────────
+# 2. TCP / UDP ANOMALIES
+# ──────────────────────────────────────────────────────────────
+
+# Large TCP Packet — possible data exfiltration
+alert tcp any any -> any any (msg:"Large TCP Packet Detected - Possible Anomaly"; dsize:>5000; priority:2; sid:1000002; rev:3;)
+
+# Large UDP Packet — possible UDP flood
+alert udp any any -> any any (msg:"Large UDP Packet Detected - Possible Flood"; dsize:>1000; priority:1; sid:1000003; rev:3;)
+
+# TCP SYN Flood — many SYN packets from same source
+alert tcp any any -> any any (msg:"TCP SYN Flood Detected"; flags:S,12; detection_filter: track by_src, count 50, seconds 5; priority:1; sid:1000010; rev:1;)
+
+# TCP RST Flood — connection reset storm
+alert tcp any any -> any any (msg:"TCP RST Flood Detected"; flags:R; detection_filter: track by_src, count 30, seconds 5; priority:1; sid:1000011; rev:1;)
+
+# UDP Flood — high volume UDP from single source
+alert udp any any -> any any (msg:"UDP Flood Detected"; detection_filter: track by_src, count 100, seconds 5; priority:1; sid:1000012; rev:1;)
+
+
+# ──────────────────────────────────────────────────────────────
+# 3. PORT SCANNING
+# ──────────────────────────────────────────────────────────────
+
+# TCP SYN Scan — classic port scan
+alert tcp any any -> any any (msg:"Possible Port Scan Detected"; flags:S; detection_filter: track by_src, count 20, seconds 5; priority:2; sid:1000004; rev:3;)
+
+# Nmap XMAS Scan — FIN+PSH+URG flags set
+alert tcp any any -> any any (msg:"Nmap XMAS Scan Detected"; flags:FPU; priority:1; sid:1000013; rev:1;)
+
+# Nmap NULL Scan — no flags set
+alert tcp any any -> any any (msg:"Nmap NULL Scan Detected"; flags:0; priority:1; sid:1000014; rev:1;)
+
+# Nmap FIN Scan — only FIN flag set
+alert tcp any any -> any any (msg:"Nmap FIN Scan Detected"; flags:F,12; priority:2; sid:1000015; rev:1;)
+
+# Stealth Scan — SYN+FIN (invalid flag combination)
+alert tcp any any -> any any (msg:"Stealth SYN-FIN Scan Detected"; flags:SF; priority:1; sid:1000016; rev:1;)
+
+
+# ──────────────────────────────────────────────────────────────
+# 4. BRUTE FORCE ATTACKS
+# ──────────────────────────────────────────────────────────────
+
+# SSH Brute Force — repeated SYN to port 22
+alert tcp any any -> any 22 (msg:"SSH Brute Force Attempt Detected"; flags:S; detection_filter: track by_src, count 5, seconds 60; priority:1; sid:1000005; rev:3;)
+
+# FTP Brute Force — repeated connections to port 21
+alert tcp any any -> any 21 (msg:"FTP Brute Force Attempt Detected"; flags:S; detection_filter: track by_src, count 5, seconds 60; priority:1; sid:1000017; rev:1;)
+
+# RDP Brute Force — repeated connections to port 3389
+alert tcp any any -> any 3389 (msg:"RDP Brute Force Attempt Detected"; flags:S; detection_filter: track by_src, count 5, seconds 60; priority:1; sid:1000018; rev:1;)
+
+# Telnet Access Attempt — port 23 is almost always malicious
+alert tcp any any -> any 23 (msg:"Telnet Connection Attempt Detected"; flags:S; priority:2; sid:1000019; rev:1;)
+
+# SMTP Brute Force — repeated connections to port 25
+alert tcp any any -> any 25 (msg:"SMTP Brute Force Attempt Detected"; flags:S; detection_filter: track by_src, count 10, seconds 60; priority:2; sid:1000020; rev:1;)
+
+# MySQL Unauthorized Access — external connection to port 3306
+alert tcp any any -> any 3306 (msg:"MySQL External Connection Attempt"; flags:S; priority:2; sid:1000021; rev:1;)
+
+
+# ──────────────────────────────────────────────────────────────
+# 5. WEB ATTACKS (HTTP)
+# ──────────────────────────────────────────────────────────────
+
+# SQL Injection — UNION SELECT pattern
+alert tcp any any -> any 80 (msg:"SQL Injection Attempt - UNION SELECT"; flow:to_server,established; content:"UNION"; nocase; content:"SELECT"; nocase; priority:1; sid:1000022; rev:1;)
+
+# SQL Injection — OR 1=1 pattern
+alert tcp any any -> any 80 (msg:"SQL Injection Attempt - OR 1=1"; flow:to_server,established; content:"OR"; nocase; content:"1=1"; priority:1; sid:1000023; rev:1;)
+
+# SQL Injection — DROP TABLE
+alert tcp any any -> any 80 (msg:"SQL Injection Attempt - DROP TABLE"; flow:to_server,established; content:"DROP"; nocase; content:"TABLE"; nocase; priority:1; sid:1000024; rev:1;)
+
+# XSS Attack — script tag injection
+alert tcp any any -> any 80 (msg:"XSS Attack Detected - Script Tag"; flow:to_server,established; content:"<script"; nocase; priority:1; sid:1000025; rev:1;)
+
+# XSS Attack — javascript event handler
+alert tcp any any -> any 80 (msg:"XSS Attack Detected - Event Handler"; flow:to_server,established; content:"onerror="; nocase; priority:1; sid:1000026; rev:1;)
+
+# Directory Traversal — ../../../
+alert tcp any any -> any 80 (msg:"Directory Traversal Attack Detected"; flow:to_server,established; content:"../"; content:"../"; priority:1; sid:1000027; rev:1;)
+
+# Shellshock (CVE-2014-6271)
+alert tcp any any -> any 80 (msg:"Shellshock Exploit Attempt Detected"; flow:to_server,established; content:"() {"; priority:1; sid:1000028; rev:1;)
+
+# HTTP PUT Method — possible file upload attack
+alert tcp any any -> any 80 (msg:"HTTP PUT Method Detected - Possible Upload Attack"; flow:to_server,established; content:"PUT "; depth:4; priority:2; sid:1000029; rev:1;)
+
+# HTTP DELETE Method — possible destructive action
+alert tcp any any -> any 80 (msg:"HTTP DELETE Method Detected"; flow:to_server,established; content:"DELETE "; depth:7; priority:2; sid:1000030; rev:1;)
+
+# HTTP Brute Force — rapid requests to login endpoints
+alert tcp any any -> any 80 (msg:"HTTP Login Brute Force Detected"; flow:to_server,established; content:"POST"; content:"login"; nocase; detection_filter: track by_src, count 10, seconds 30; priority:1; sid:1000031; rev:1;)
+
+# HTTPS variants (port 443)
+alert tcp any any -> any 443 (msg:"HTTPS Brute Force Attempt Detected"; flags:S; detection_filter: track by_src, count 30, seconds 10; priority:2; sid:1000032; rev:1;)
+
+
+# ──────────────────────────────────────────────────────────────
+# 6. DNS ATTACKS
+# ──────────────────────────────────────────────────────────────
+
+# DNS Zone Transfer Attempt — AXFR query
+alert tcp any any -> any 53 (msg:"DNS Zone Transfer Attempt Detected"; flow:to_server,established; content:"|00 FC|"; priority:1; sid:1000033; rev:1;)
+
+# DNS Amplification — large DNS response
+alert udp any 53 -> any any (msg:"DNS Amplification Attack Detected"; dsize:>512; detection_filter: track by_dst, count 20, seconds 5; priority:1; sid:1000034; rev:1;)
+
+# DNS Tunneling — suspiciously long DNS query
+alert udp any any -> any 53 (msg:"Possible DNS Tunneling Detected"; dsize:>200; priority:2; sid:1000035; rev:1;)
+
+
+# ──────────────────────────────────────────────────────────────
+# 7. SMB / WINDOWS EXPLOITS
+# ──────────────────────────────────────────────────────────────
+
+# SMB Access — port 445 from external source
+alert tcp any any -> any 445 (msg:"SMB Connection Attempt Detected"; flags:S; priority:2; sid:1000036; rev:1;)
+
+# EternalBlue Exploit Pattern (MS17-010) — SMB exploit
+alert tcp any any -> any 445 (msg:"Possible EternalBlue SMB Exploit Detected"; flow:to_server,established; content:"|FF|SMB"; content:"|23 00 00 00|"; priority:1; sid:1000037; rev:1;)
+
+# WannaCry Ransomware — SMB worm propagation
+alert tcp any any -> any 445 (msg:"Possible WannaCry SMB Worm Propagation"; flags:S; detection_filter: track by_src, count 10, seconds 5; priority:1; sid:1000038; rev:1;)
+
+
+# ──────────────────────────────────────────────────────────────
+# 8. SUSPICIOUS PROTOCOLS & PAYLOADS
+# ──────────────────────────────────────────────────────────────
+
+# IRC Traffic — common C&C channel for botnets
+alert tcp any any -> any 6667 (msg:"IRC Traffic Detected - Possible Botnet C2"; flags:S; priority:2; sid:1000039; rev:1;)
+
+# Tor Network — connection to known Tor port
+alert tcp any any -> any 9001 (msg:"Tor Network Connection Detected"; flags:S; priority:2; sid:1000040; rev:1;)
+
+# Reverse Shell — outbound connection on suspicious port
+alert tcp any any -> any 4444 (msg:"Possible Reverse Shell Connection - Port 4444"; flags:S; priority:1; sid:1000041; rev:1;)
+
+# Metasploit Default — common Metasploit listener port
+alert tcp any any -> any 4443 (msg:"Possible Metasploit Reverse Shell - Port 4443"; flags:S; priority:1; sid:1000042; rev:1;)
+
+# Netcat Backdoor — common backdoor port
+alert tcp any any -> any 1234 (msg:"Possible Netcat Backdoor Connection"; flags:S; priority:2; sid:1000043; rev:1;)
+
+# Bitcoin Mining — Stratum protocol
+alert tcp any any -> any 3333 (msg:"Possible Cryptomining - Stratum Protocol"; flags:S; priority:2; sid:1000044; rev:1;)
