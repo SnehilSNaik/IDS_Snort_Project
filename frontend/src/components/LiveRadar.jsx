@@ -52,7 +52,7 @@ export function LiveRadar({ stats, alerts, onRefresh, onClearAlerts, onBlockIP, 
 
       <div className="glass-panel" style={{ padding: '16px 20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div><strong>ML evaluation — held-out test set</strong><div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{mlMetrics?.status === 'ok' ? `${mlMetrics.model} · ${mlMetrics.mode} · ${mlMetrics.test_samples} test flows · trained ${mlMetrics.trained_at}` : 'Metrics appear here after the next model-training run.'}</div></div>
+          <div><strong>ML evaluation — held-out benchmark test set</strong><div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{mlMetrics?.status === 'ok' ? `${mlMetrics.model} · ${mlMetrics.mode} · ${mlMetrics.test_samples} test flows · trained ${mlMetrics.trained_at}` : 'Metrics appear here after the next model-training run.'}</div>{mlMetrics?.status === 'ok' && <div style={{ fontSize: 11, color: '#aabdc4', marginTop: 4 }}>{mlMetrics.evaluation_scope || 'Benchmark results are not a guarantee of live-network performance.'}</div>}</div>
           {mlMetrics?.status === 'ok' && <div style={{ display: 'flex', gap: 16, fontFamily: 'var(--font-mono)', fontSize: 13 }}><span>Precision <b style={{ color: '#38bdf8' }}>{mlMetrics.precision}%</b></span><span>Recall <b style={{ color: '#10b981' }}>{mlMetrics.recall}%</b></span><span>F1 <b style={{ color: '#c084fc' }}>{mlMetrics.f1}%</b></span><span>Accuracy <b>{mlMetrics.accuracy}%</b></span><span style={{ color: '#94a3b8' }}>FP {mlMetrics.confusion_matrix?.fp} · FN {mlMetrics.confusion_matrix?.fn}</span></div>}
         </div>
       </div>

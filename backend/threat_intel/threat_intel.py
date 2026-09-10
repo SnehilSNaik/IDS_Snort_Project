@@ -174,83 +174,6 @@ def _lookup_ipinfo(ip: str) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────
-# AbuseIPDB  (SECONDARY — optional)
-# ─────────────────────────────────────────────────────────────
-def _lookup_abuseipdb(ip: str) -> dict:
-    if not ABUSEIPDB_KEY:
-        return {}
-    with _abuse_lock:
-        wait = ABUSEIPDB_MIN_INTERVAL - (time.time() - _last_abuse_call[0])
-        if wait > 0:
-            time.sleep(wait)
-        _last_abuse_call[0] = time.time()
-
-    try:
-        url = f"{ABUSEIPDB_CHECK_URL}?ipAddress={ip}&maxAgeInDays=90&verbose"
-        req = urllib.request.Request(url, headers={
-            "Key": ABUSEIPDB_KEY,
-            "Accept": "application/json",
-        })
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            body = json.loads(resp.read().decode())
-        d = body.get("data", {})
-        return {
-            "ti_abuse_score":   d.get("abuseConfidenceScore", 0),
-            "ti_total_reports": d.get("totalReports", 0),
-            "ti_last_reported": d.get("lastReportedAt", ""),
-            # ipinfo may have already set these — only override if AbuseIPDB knows better
-            "ti_isp":           d.get("isp", ""),
-            "ti_usage_type":    d.get("usageType", ""),
-        }
-    except urllib.error.HTTPError as e:
-        if e.code == 429:
-            print(f"[TI] AbuseIPDB rate limit for {ip}")
-        elif e.code == 422:
-            pass   # private IP — silently ignore
-        else:
-            print(f"[TI] AbuseIPDB HTTP {e.code} for {ip}")
-        return {}
-    except Exception as e:
-        print(f"[TI] AbuseIPDB error for {ip}: {e}")
-        return {}
-
-
-# ─────────────────────────────────────────────────────────────
-# VirusTotal  (SECONDARY — optional)
-# ─────────────────────────────────────────────────────────────
-def _lookup_virustotal(ip: str) -> dict:
-    if not VIRUSTOTAL_KEY:
-        return {}
-    with _vt_lock:
-        wait = VIRUSTOTAL_MIN_INTERVAL - (time.time() - _last_vt_call[0])
-        if wait > 0:
-            time.sleep(wait)
-        _last_vt_call[0] = time.time()
-
-    try:
-        url = VIRUSTOTAL_IP_URL.format(ip=ip)
-        req = urllib.request.Request(url, headers={"x-apikey": VIRUSTOTAL_KEY})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            body = json.loads(resp.read().decode())
-        stats = body.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
-        return {
-            "ti_vt_malicious":  stats.get("malicious", 0),
-            "ti_vt_suspicious": stats.get("suspicious", 0),
-            "ti_vt_harmless":   stats.get("harmless", 0),
-            "ti_vt_undetected": stats.get("undetected", 0),
-        }
-    except urllib.error.HTTPError as e:
-        if e.code == 429:
-            print(f"[TI] VirusTotal rate limit for {ip}")
-        else:
-            print(f"[TI] VirusTotal HTTP {e.code} for {ip}")
-        return {}
-    except Exception as e:
-        print(f"[TI] VirusTotal error for {ip}: {e}")
-        return {}
-
-
-# ─────────────────────────────────────────────────────────────
 # Main enrichment function (runs in background thread)
 # ─────────────────────────────────────────────────────────────
 def _do_enrich(alert: dict, alerts_list, lock, save_fn):
@@ -272,8 +195,6 @@ def _do_enrich(alert: dict, alerts_list, lock, save_fn):
 
     # ── Determine confirmed-malicious flag ────────────────────
     bogon       = ti_data.get("ti_bogon", False)
-    susp_org    = ti_data.get("ti_suspicious_org", False)
-
     ti_confirmed = bool(bogon)
     ti_data["ti_confirmed"]   = ti_confirmed
     ti_data["ti_enriched_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

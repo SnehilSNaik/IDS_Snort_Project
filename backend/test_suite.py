@@ -197,7 +197,7 @@ class TestIDSComponents(unittest.TestCase):
         self.assertIsNone(parse_alert_block("Invalid log line without pattern"))
 
     # -------------------------------------------------------------
-    # 8. Network Monitor Tests (DNS Entropy & ARP Alert)
+    # 8. Network Monitor Tests (DNS entropy)
     # -------------------------------------------------------------
     def test_network_monitors(self):
         # Normal domain low entropy vs high entropy payload

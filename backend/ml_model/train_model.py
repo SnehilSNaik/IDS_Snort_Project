@@ -476,6 +476,7 @@ def train():
         "f1": round(float(f1_score(y_test, y_pred, zero_division=0)) * 100, 2),
         "confusion_matrix": {"tn": cm[0][0], "fp": cm[0][1], "fn": cm[1][0], "tp": cm[1][1]},
         "features": feature_names,
+        "evaluation_scope": "Held-out CIC-IDS-2017 benchmark test split; not a guarantee of live-network performance.",
         "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
     with open(METRICS_FILE, "w", encoding="utf-8") as f:

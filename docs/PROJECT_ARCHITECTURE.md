@@ -7,7 +7,7 @@ This document details the underlying engineering, detection mathematics, feature
 ## 1. Core Engineering: Hybrid Multi-Engine Model
 
 Traditional intrusion detection systems suffer from a fundamental tradeoff:
-* **Signature Detection (Snort):** 100% precision on known attack patterns, but completely blind to 0-day exploits, novel obfuscations, or polymorphic floods.
+* **Signature Detection (Snort):** Fast matching against configured known-threat rules; rule tuning is still needed to manage false positives.
 * **Anomaly Detection (Machine Learning):** Highly adaptable to novel deviations, but susceptible to false positives during bursty legitimate network traffic.
 
 Our architecture integrates both approaches simultaneously and unifies them through an alert correlation pipeline:
@@ -42,7 +42,7 @@ Our architecture integrates both approaches simultaneously and unifies them thro
    [CORRELATED_ATTACK (99%)]            [Automated Response]
    - Web Audio Siren                    - Windows Firewall Rule
    - Telegram Alert                     - IP Quarantine Score
-   - Immutable Blockchain Ledger        - SQLite Audit Store
+   - Hash-Chained Audit Log             - SQLite Event Store
 ```
 
 ---
@@ -76,14 +76,14 @@ Our architecture integrates both approaches simultaneously and unifies them thro
   13. `PSH Flag Count`
   14. `ACK Flag Count`
   15. `Init_Win_bytes_forward`
-- **Inference:** A sliding 5-tuple bidirectional flow collector tracks live TCP/UDP bursts, standardizes features using `StandardScaler`, and executes probabilistic predictions.
+- **Inference:** A bidirectional 5-tuple collector finalizes TCP/UDP flows on FIN/RST, packet cap, or idle timeout, then standardizes the same 15 features with the saved `StandardScaler` before probabilistic inference.
+- **Evaluation scope:** The saved 99.52% accuracy / 99.40% F1 figures are held-out CIC-IDS-2017 benchmark results, not a promise of live-network accuracy.
 
 ### C. Deep Learning LSTM Autoencoder (`autoencoder.py`)
 - **Architecture:** Multi-layer LSTM Autoencoder trained strictly on normal baseline sequences.
 - **Anomaly Scoring:** Computes Mean Squared Error (MSE) reconstruction loss across consecutive packets. When `MSE > threshold`, the sequence is flagged as an evasion or volumetric anomaly.
 
-### D. Network Monitors
-- **ARP Spoofing / MITM (`network_monitor/`):** Tracks MAC-to-IP bindings; alerts when duplicate MAC addresses claim the default gateway.
+### D. DNS Monitor
 - **DNS Tunneling Detector:** Evaluates Shannon entropy on subdomains. High-entropy queries (e.g., base64/hex data exfiltration) trigger immediate alerts.
 
 ---
@@ -96,14 +96,13 @@ When an attacker launches a sustained campaign, both engines fire independently:
 3. If both alerts originate from the **same Source IP within a 2-second time window**, the correlator synthesizes them into a **`CORRELATED_ATTACK`**:
    - Severity: `HIGH`
    - Confidence: `99.0%`
-   - Action: Immediate firewall quarantine + audio alert + Telegram push + blockchain commit.
+   - Action: Playbook-based response, alerting, and a hash-chained SQLite audit record. Firewall blocking follows the active playbook.
 
 ---
 
-## 4. SHA-256 Attacker Blockchain Ledger
+## 4. SHA-256 Hash-Chained Audit Log
 
-Every high-severity alert is hashed and committed to an append-only cryptographic ledger (`backend/blockchain/chain.json`):
-- **Genesis Block:** Initializes the chain.
-- **Block Content:** Index, UTC timestamp, attacker metadata (IP, attack type, confidence, payload size), previous hash, nonce, and current SHA-256 hash.
-- **Proof-of-Work:** Requires leading zero bits for tamper resistance.
-- **Live Verification:** The React dashboard provides a 1-click ledger audit that recalculates all block hashes sequentially to prove the evidence has not been altered.
+Security events are appended to SQLite (`backend/data/ids.db`) with a SHA-256 link to the preceding record:
+- **Record content:** UTC timestamp, action, subject, detail, previous hash, and record hash.
+- **Tamper evidence:** The verifier recomputes each record hash and validates the previous-hash sequence.
+- **Scope:** This is a lightweight local audit trail for the lab prototype, not a distributed blockchain or proof-of-work system.

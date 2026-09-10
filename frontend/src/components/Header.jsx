@@ -44,7 +44,7 @@ export function Header({ isEngineRunning, onStartEngine, onStopEngine, onResetAl
           </button>
         )}
 
-        <button className="btn" onClick={onResetAllData} title="Reset all attack data, threat scores, incident logs & blockchain ledger" style={{ borderColor: 'rgba(245, 158, 11, 0.4)', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)' }}>
+        <button className="btn" onClick={onResetAllData} title="Reset alerts, threat scores, incident logs, and the hash-chained audit log" style={{ borderColor: 'rgba(245, 158, 11, 0.4)', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.1)' }}>
           <RotateCcw size={15} /> Reset Demo Data
         </button>
 

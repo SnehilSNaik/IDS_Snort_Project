@@ -346,19 +346,19 @@ def logout():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    alerts = load_alerts()
-    stats  = compute_stats(alerts)
-    now    = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    username = session.get("user_username", "User")
-    
-    # Check if compiled React bundle exists in static/dist
+    """Serve the current React UI; the old Flask dashboard has been retired."""
+    # A production build is served directly by Flask. During development, send
+    # the browser to Vite so no stale Flask template can ever be demonstrated.
     dist_html = os.path.join(BASE_DIR, "dashboard", "static", "dist", "index.html")
     if os.path.exists(dist_html):
         with open(dist_html, "r", encoding="utf-8") as f:
             return f.read()
 
-    return render_template("index.html", alerts=alerts, stats=stats,
-                           last_updated=now, username=username)
+    frontend_url = os.environ.get(
+        "IDS_FRONTEND_URL",
+        f"{request.scheme}://{request.host.split(':')[0]}:5173",
+    )
+    return redirect(frontend_url)
 
 
 @app.route("/assets/<path:path>")

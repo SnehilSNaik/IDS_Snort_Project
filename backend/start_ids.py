@@ -3,8 +3,8 @@
 start_ids.py  —  IDS_Snort_Project Launcher
 =============================================================
 Starts the Flask Dashboard directly.
-All other components (Snort, ML, Correlator, ARP monitor,
-DNS monitor) are launched via the 'Engage IDS Engine'
+All other components (Snort, flow-based ML, LSTM, Correlator,
+and DNS monitor) are launched via the 'Engage IDS Engine'
 button in the web dashboard UI.
 
 API keys are loaded automatically from .env in the project

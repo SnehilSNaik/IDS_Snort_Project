@@ -31,5 +31,6 @@
     "ACK Flag Count",
     "Init_Win_bytes_forward"
   ],
+  "evaluation_scope": "Held-out CIC-IDS-2017 benchmark test split; not a guarantee of live-network performance.",
   "trained_at": "2026-09-02 00:38:28"
 }
