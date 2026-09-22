@@ -10,6 +10,7 @@ MAPPINGS = {
     "ICMP_PING_FLOOD": {"tactic": "Impact", "technique_id": "T1498", "technique": "Network Denial of Service"},
     "LSTM_ANOMALY": {"tactic": "Command and Control", "technique_id": "T1071", "technique": "Application Layer Protocol"},
     "DNS_TUNNEL": {"tactic": "Command and Control", "technique_id": "T1071.004", "technique": "DNS"},
+    "FILE_ACCESS": {"tactic": "Collection", "technique_id": "T1005", "technique": "Data from Local System"},
     "CORRELATED_ATTACK": {"tactic": "Multiple", "technique_id": "T1595 / T1071", "technique": "Scanning and application-layer anomaly"},
 }
 

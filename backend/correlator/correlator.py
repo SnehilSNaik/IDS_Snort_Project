@@ -67,7 +67,7 @@ DEDUP_WINDOW       = 2.0  # seconds — suppress near-identical alerts from same
 # All recognised alert types (extend here when adding new detectors)
 KNOWN_ALERT_TYPES = {
     "SNORT_SIGNATURE", "ML_ANOMALY", "ICMP_PING_FLOOD",
-    "LSTM_ANOMALY", "DNS_TUNNEL",
+    "LSTM_ANOMALY", "DNS_TUNNEL", "FILE_ACCESS",
     "CORRELATED_ATTACK", "IP_BLOCKED",
 }
 

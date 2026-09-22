@@ -30,6 +30,8 @@ import urllib.parse
 import argparse
 import platform
 import uuid
+import subprocess
+import xml.etree.ElementTree as ET
 from datetime import datetime
 
 # =============================================================
@@ -40,6 +42,8 @@ MONITOR_PORT  = 9999              # HP Correlator UDP port
 VICTIM_NAME   = os.environ.get("IDS_ENDPOINT_NAME", socket.gethostname())
 HTTP_TRAP_PORT = 8888             # Local HTTP honeypot port (optional)
 AGENT_VERSION  = "2.0"
+FILE_AUDIT_STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "file_audit_state.json")
+DEFAULT_PROTECTED_POLICY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "protected_paths.json")
 # =============================================================
 
 # ----- Detection thresholds -----
@@ -111,7 +115,7 @@ def send_endpoint_status(message_type):
 
 
 def send_alert(alert_type, severity, src_ip, protocol, confidence, message,
-               packet_size=256, packet_rate=1):
+               packet_size=256, packet_rate=1, metadata=None):
     """Send structured alert UDP packet to HP Monitoring PC Correlator."""
     alert = {
         "id":          int(time.time() * 1000),
@@ -130,6 +134,8 @@ def send_alert(alert_type, severity, src_ip, protocol, confidence, message,
         "endpoint_id": ENDPOINT_ID,
         "endpoint_hostname": socket.gethostname(),
     }
+    if metadata:
+        alert.update(metadata)
     try:
         data = json.dumps(alert).encode("utf-8")
         udp_sock.sendto(data, (MONITOR_PC_IP, MONITOR_PORT))
@@ -166,6 +172,167 @@ def record_connection(src_ip):
         connection_log[src_ip].append(now)
         count = len(connection_log[src_ip])
     return count
+
+
+# =============================================================
+# Windows protected-file access monitor (Security Event ID 4663)
+# =============================================================
+
+def _event_data(xml_text):
+    """Extract Security-event fields from one rendered XML event."""
+    root = ET.fromstring(xml_text)
+    ns = {"e": "http://schemas.microsoft.com/win/2004/08/events/event"}
+    record_id = root.findtext("e:System/e:EventRecordID", default="0", namespaces=ns)
+    fields = {item.attrib.get("Name", ""): item.text or "" for item in root.findall("e:EventData/e:Data", ns)}
+    return int(record_id), fields
+
+
+def _recent_file_events(limit=64):
+    """Read recent Windows Security 4663 events without third-party packages."""
+    if os.name != "nt":
+        return []
+    query = "*[System[(EventID=4663)]]"
+    try:
+        result = subprocess.run(
+            ["wevtutil", "qe", "Security", f"/q:{query}", "/f:RenderedXml", "/rd:true", f"/c:{limit}"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if result.returncode != 0:
+        return []
+    events = []
+    for chunk in result.stdout.split("</Event>"):
+        if "<Event" not in chunk:
+            continue
+        try:
+            events.append(_event_data(chunk + "</Event>"))
+        except (ET.ParseError, ValueError):
+            continue
+    return events
+
+
+def _load_file_audit_state():
+    try:
+        with open(FILE_AUDIT_STATE_FILE, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_file_audit_state(state):
+    try:
+        with open(FILE_AUDIT_STATE_FILE, "w", encoding="utf-8") as handle:
+            json.dump(state, handle)
+    except OSError:
+        pass
+
+
+def _is_read_access(access_mask):
+    """Windows FILE_READ_DATA is bit 0x1; avoid alerting on write-only events."""
+    try:
+        return bool(int(access_mask, 16) & 0x1)
+    except ValueError:
+        return False
+
+
+def load_protected_assets(policy_file, cli_path=None):
+    """Load an endpoint-owned protected-asset policy instead of fixed paths."""
+    assets = []
+    try:
+        with open(policy_file, "r", encoding="utf-8") as handle:
+            policy = json.load(handle)
+        for item in policy.get("protected_assets", []):
+            if not item.get("enabled", True) or not item.get("path"):
+                continue
+            assets.append({
+                "name": str(item.get("name") or "Protected asset"),
+                "path": os.path.normcase(os.path.abspath(str(item["path"]))),
+                "severity": str(item.get("severity", "MEDIUM")).upper(),
+                "asset_class": str(item.get("asset_class", "Sensitive data")),
+            })
+    except FileNotFoundError:
+        pass  # A policy is optional; the agent still supports normal monitoring.
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"[FILE AUDIT] Could not load policy {policy_file}: {exc}")
+
+    if cli_path:
+        assets.append({
+            "name": "Command-line protected folder",
+            "path": os.path.normcase(os.path.abspath(cli_path)),
+            "severity": "MEDIUM",
+            "asset_class": "Lab data",
+        })
+
+    # Avoid duplicate paths while preserving the first policy label.
+    unique = {}
+    for asset in assets:
+        unique.setdefault(asset["path"], asset)
+    return list(unique.values())
+
+
+def _matching_asset(object_name, assets):
+    if not object_name:
+        return None
+    candidate = os.path.normcase(os.path.abspath(object_name))
+    for asset in assets:
+        protected = asset["path"]
+        if candidate == protected or candidate.startswith(protected + os.sep):
+            return asset
+    return None
+
+
+def start_file_access_monitor(assets, poll_seconds=2.0):
+    """Report new read accesses to a deliberately protected lab folder.
+
+    Windows must have File System Success auditing and a SACL on each asset path.
+    The included setup script applies those settings only when an administrator
+    explicitly runs it.
+    """
+    if os.name != "nt":
+        print("[FILE AUDIT] Protected-folder monitoring is available on Windows only.")
+        return
+    state = _load_file_audit_state()
+    state_key = "last_record:protected_assets"
+    last_record = int(state.get(state_key, 0))
+    initial = _recent_file_events()
+    if not last_record:
+        # Establish a baseline so historical Windows events are never reported.
+        last_record = max((record for record, _ in initial), default=0)
+        state[state_key] = last_record
+        _save_file_audit_state(state)
+    print("[FILE AUDIT] Protected asset policy loaded:")
+    for asset in assets:
+        print(f"  - {asset['name']} ({asset['asset_class']}): {asset['path']}")
+    print("[FILE AUDIT] Waiting for Security Event ID 4663 (run setup_file_audit.ps1 once as Administrator).")
+
+    while True:
+        events = _recent_file_events()
+        for record_id, data in sorted(events):
+            if record_id <= last_record:
+                continue
+            object_name = data.get("ObjectName", "")
+            asset = _matching_asset(object_name, assets)
+            if asset:
+                if _is_read_access(data.get("AccessMask", "")):
+                    actor = data.get("SubjectUserName", "Unknown account")
+                    process = data.get("ProcessName", "Unknown process")
+                    send_alert(
+                        alert_type="FILE_ACCESS", severity=asset["severity"], src_ip="Unknown",
+                        protocol="ENDPOINT", confidence=85.0, packet_size=0, packet_rate=1,
+                        message=f"Protected asset read: {object_name} by {actor} via {process}",
+                        metadata={
+                            "protected_asset": asset["name"],
+                            "protected_asset_class": asset["asset_class"],
+                            "protected_path": asset["path"],
+                            "actor": actor,
+                            "process_name": process,
+                        },
+                    )
+            last_record = max(last_record, record_id)
+        state[state_key] = last_record
+        _save_file_audit_state(state)
+        time.sleep(max(1.0, poll_seconds))
 
 
 # =============================================================
@@ -332,9 +499,13 @@ def main():
     parser.add_argument("--port", type=int, default=MONITOR_PORT, help="IDS correlator UDP port")
     parser.add_argument("--name", default=VICTIM_NAME, help="Display name shown in the SOC")
     parser.add_argument("--honeypot-port", type=int, default=HTTP_TRAP_PORT)
+    parser.add_argument("--policy-file", default=DEFAULT_PROTECTED_POLICY, help="JSON protected-asset policy file")
+    parser.add_argument("--watch-path", help="Optional one-off folder added to the protected-asset policy")
+    parser.add_argument("--file-audit-poll-seconds", type=float, default=2.0, help="File-audit event polling interval")
     args = parser.parse_args()
     MONITOR_PC_IP, MONITOR_PORT = args.server, args.port
     VICTIM_NAME, HTTP_TRAP_PORT = args.name, args.honeypot_port
+    protected_assets = load_protected_assets(args.policy_file, args.watch_path)
     send_endpoint_status("ENDPOINT_REGISTER")
     banner = f"""
 ==============================================================
@@ -345,6 +516,7 @@ def main():
   Reporting To    : {MONITOR_PC_IP}:{MONITOR_PORT}  (HP Monitoring PC)
   HTTP Honeypot   : 0.0.0.0:{HTTP_TRAP_PORT}
   UDP Monitor     : 0.0.0.0:9998
+  File Audit      : {len(protected_assets)} policy asset(s)
 ==============================================================
   All detected attacks will appear on HP dashboard at:
   http://{MONITOR_PC_IP}:5000
@@ -358,6 +530,11 @@ def main():
         threading.Thread(target=start_udp_monitor, daemon=True),
         threading.Thread(target=heartbeat_loop, daemon=True),
     ]
+    if protected_assets:
+        threads.append(threading.Thread(
+            target=start_file_access_monitor,
+            args=(protected_assets, args.file_audit_poll_seconds), daemon=True,
+        ))
     for t in threads:
         t.start()
 

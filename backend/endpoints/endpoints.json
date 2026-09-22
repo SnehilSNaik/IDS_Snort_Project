@@ -1,1 +1,14 @@
-{}
+{
+  "integration-test-endpoint": {
+    "endpoint_id": "integration-test-endpoint",
+    "name": "Integration Test Endpoint",
+    "hostname": "localhost",
+    "ip": "127.0.0.1",
+    "os": "Unknown",
+    "agent_version": "Unknown",
+    "first_seen": "2026-09-21 18:12:06 UTC",
+    "last_seen": "2026-09-21 18:12:06 UTC",
+    "last_alert_at": "2026-09-21 18:12:06 UTC",
+    "alert_count": 1
+  }
+}

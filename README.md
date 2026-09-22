@@ -104,8 +104,10 @@ python simulate_attack.py
 ```
 Run any of the 6 safe built-in lab scenarios:
 * **Option [1] SYN Flood:** Triggers Snort rule + ML anomaly → merged by Correlator into a `CORRELATED_ATTACK` (99% confidence) with an audible alarm.
-* **Option [3] ICMP Ping Flood:** Volumetric flood detected by Snort signature matching.
-* **Option [5] DNS Tunneling / Exfiltration:** High Shannon entropy subdomain queries flagged immediately.
+* **Option [2] ICMP Ping Flood:** Volumetric ICMP flood detection.
+* **Option [3] UDP Flood:** ML anomaly detection for unusual UDP traffic.
+* **Option [4] Port Scan:** Snort signature detection for repeated TCP probes.
+* **Option [5] LSTM Anomaly:** Sequence-based anomaly detection using the autoencoder.
 * **Option [6] DNS Tunneling / Exfiltration:** High-entropy DNS queries are flagged.
 
 ### Step 4: Demonstrate Multi-Engine Correlation

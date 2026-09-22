@@ -144,6 +144,7 @@ export function LiveRadar({ stats, alerts, onRefresh, onClearAlerts, onBlockIP, 
                           <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '6px', background: 'rgba(99,102,241,0.15)', color: '#6366f1' }}>
                             {a.type}
                           </span>
+                          {a.protected_asset && <div style={{ marginTop: 5, color: '#79b9c7', fontSize: 10, fontWeight: 700 }}>Asset: {a.protected_asset}</div>}
                         </td>
                         <td style={{ padding: '12px 18px' }}>
                           <span style={{ color: '#38bdf8', fontSize: '12px', fontWeight: 700, background: 'rgba(56,189,248,0.1)', padding: '2px 8px', borderRadius: '6px' }}>{a.protocol}</span>

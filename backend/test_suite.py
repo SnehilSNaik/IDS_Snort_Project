@@ -33,7 +33,7 @@ from network_monitor.dns_monitor import shannon_entropy
 from ml_model.flow_collector import FlowCollector
 from correlator.correlator import KNOWN_ALERT_TYPES
 from simulate_attack import ATTACKER_IPS
-from victim_agent.agent import check_sqli
+from victim_agent.agent import check_sqli, _event_data, _is_read_access, _matching_asset
 
 
 class TestIDSComponents(unittest.TestCase):
@@ -237,6 +237,20 @@ class TestIDSComponents(unittest.TestCase):
         self.assertTrue(check_sqli("SELECT * FROM users WHERE '1'='1'", "198.51.100.1"))
         self.assertTrue(check_sqli("admin' OR 1=1 --", "198.51.100.1"))
         self.assertFalse(check_sqli("normal user request login query", "198.51.100.1"))
+
+    def test_windows_file_audit_parser(self):
+        event = '''<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><EventRecordID>42</EventRecordID></System><EventData><Data Name="ObjectName">C:\\IDS_Lab_Demo\\demo.txt</Data><Data Name="AccessMask">0x1</Data><Data Name="SubjectUserName">lab-user</Data></EventData></Event>'''
+        record_id, data = _event_data(event)
+        self.assertEqual(record_id, 42)
+        self.assertEqual(data["ObjectName"], "C:\\IDS_Lab_Demo\\demo.txt")
+        self.assertTrue(_is_read_access(data["AccessMask"]))
+        self.assertFalse(_is_read_access("0x2"))
+
+    def test_protected_asset_policy_matching(self):
+        assets = [{"name": "Finance", "path": r"c:\finance", "severity": "HIGH", "asset_class": "Financial records"}]
+        match = _matching_asset(r"C:\Finance\quarterly.xlsx", assets)
+        self.assertEqual(match["name"], "Finance")
+        self.assertIsNone(_matching_asset(r"C:\Users\Public\notes.txt", assets))
 
 
 if __name__ == "__main__":

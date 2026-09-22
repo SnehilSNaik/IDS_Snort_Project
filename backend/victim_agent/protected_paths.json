@@ -1,0 +1,12 @@
+{
+  "policy_version": 1,
+  "protected_assets": [
+    {
+      "name": "Example finance reports",
+      "path": "C:\\Replace\\With\\Your\\ProtectedFolder",
+      "asset_class": "Financial records",
+      "severity": "HIGH",
+      "enabled": false
+    }
+  ]
+}
