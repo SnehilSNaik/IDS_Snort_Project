@@ -70,5 +70,14 @@
     "severity": "HIGH",
     "attack_type": "DNS_TUNNEL",
     "firewall_rule": true
+  },
+  {
+    "ip": "162.142.125.11",
+    "reason": "PB-002 (Block High-Confidence LSTM Threat): LSTM_ANOMALY/HIGH/99.0% from 162.142.125.11",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-27 16:05:39",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
   }
 ]
