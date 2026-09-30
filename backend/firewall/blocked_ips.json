@@ -1,29 +1,191 @@
 [
   {
     "ip": "45.33.32.156",
-    "reason": "PB-007 (Repeat High-Severity Snort Block): SNORT_SIGNATURE/HIGH/97.3% from 45.33.32.156",
+    "reason": "Threat score 19 >= quarantine threshold 10",
     "blocked_by": "PlaybookEngine",
-    "blocked_at": "2026-09-30T01:06:16.695314",
+    "blocked_at": "2026-09-30T09:41:47.310773",
     "severity": "HIGH",
     "attack_type": "SNORT_SIGNATURE",
-    "firewall_rule": false
+    "firewall_rule": true
   },
   {
     "ip": "185.220.101.47",
-    "reason": "PB-001 (Auto-Block Correlated Attack): CORRELATED_ATTACK/HIGH/99.0% from 185.220.101.47",
+    "reason": "Threat score 27 >= quarantine threshold 10",
     "blocked_by": "PlaybookEngine",
-    "blocked_at": "2026-09-30T01:06:19.033717",
+    "blocked_at": "2026-09-30T09:41:46.052126",
     "severity": "HIGH",
-    "attack_type": "CORRELATED_ATTACK",
+    "attack_type": "SNORT_SIGNATURE",
+    "firewall_rule": true
+  },
+  {
+    "ip": "198.235.24.44",
+    "reason": "Threat score 16 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:41:49.606175",
+    "severity": "HIGH",
+    "attack_type": "SNORT_SIGNATURE",
+    "firewall_rule": true
+  },
+  {
+    "ip": "89.248.167.131",
+    "reason": "Threat score 11 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:42:01.298772",
+    "severity": "MEDIUM",
+    "attack_type": "SNORT_SIGNATURE",
+    "firewall_rule": true
+  },
+  {
+    "ip": "192.178.211.108",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:34:51.013925",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
     "firewall_rule": false
   },
   {
-    "ip": "172.20.10.4",
-    "reason": "Test block",
-    "blocked_by": "admin",
-    "blocked_at": "2026-09-30T07:33:25.455222",
+    "ip": "8.8.4.4",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:35:29.006321",
     "severity": "HIGH",
-    "attack_type": "MANUAL",
+    "attack_type": "LSTM_ANOMALY",
     "firewall_rule": false
+  },
+  {
+    "ip": "23.11.215.50",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:35:35.775987",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": false
+  },
+  {
+    "ip": "8.8.8.8",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:40:26.680735",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "23.212.254.99",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:42:25.672365",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "64.233.170.188",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:42:58.578571",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "142.250.206.74",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:44:39.088479",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "162.142.125.11",
+    "reason": "Threat score 10 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:44:41.152985",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "92.118.160.4",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:44:43.890508",
+    "severity": "HIGH",
+    "attack_type": "DNS_TUNNEL",
+    "firewall_rule": true
+  },
+  {
+    "ip": "142.250.66.14",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:45:11.540031",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "57.144.169.33",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:46:51.249728",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "142.251.152.119",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:47:03.126748",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "142.250.206.66",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:47:11.703159",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "142.250.205.136",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:47:23.224876",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "142.251.222.195",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:48:22.598406",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "34.117.43.148",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:48:49.569905",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
+  },
+  {
+    "ip": "4.2.2.2",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-09-30T09:49:18.946020",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true
   }
 ]

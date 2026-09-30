@@ -38,7 +38,7 @@
     "trigger_confidence_min": 0.0,
     "quarantine_threshold": 10,
     "actions": ["block_ip", "telegram_alert", "email_alert", "incident_log"],
-    "enabled": false
+    "enabled": true
   },
   {
     "id": "PB-007",

@@ -80,6 +80,10 @@ ALERTS_FILE  = os.path.join(BASE_DIR, "alerts", "alerts.json")
 COUNT_FILE   = os.path.join(BASE_DIR, "alerts", "count.json")
 ML_METRICS_FILE = os.path.join(BASE_DIR, "ml_model", "metrics.json")
 USERS_FILE   = os.path.join(os.path.dirname(__file__), "users.json")
+RESPONSE_DIR        = os.path.join(BASE_DIR, "response")
+INCIDENT_LOG_FILE   = os.path.join(RESPONSE_DIR, "incident_log.json")
+THREAT_SCORE_FILE   = os.path.join(RESPONSE_DIR, "threat_scores.json")
+PLAYBOOKS_FILE      = os.path.join(RESPONSE_DIR, "playbooks.json")
 
 # Global list to track running background engines
 active_processes = []
@@ -687,6 +691,7 @@ def api_check_ip(ip):
 
 
 @app.route("/api/firewall/reachability/<path:ip>", methods=["POST"])
+@login_required
 def api_record_reachability(ip):
     data = request.get_json(silent=True) or {}
     if _blocker is None:
@@ -710,11 +715,9 @@ def api_record_reachability(ip):
 # --------------------------------------------------------
 # INCIDENT RESPONSE API ROUTES
 # --------------------------------------------------------
+# (RESPONSE_DIR, INCIDENT_LOG_FILE, THREAT_SCORE_FILE, PLAYBOOKS_FILE
+#  are defined above near the other file-path constants.)
 
-RESPONSE_DIR        = os.path.join(BASE_DIR, "response")
-INCIDENT_LOG_FILE   = os.path.join(RESPONSE_DIR, "incident_log.json")
-THREAT_SCORE_FILE   = os.path.join(RESPONSE_DIR, "threat_scores.json")
-PLAYBOOKS_FILE      = os.path.join(RESPONSE_DIR, "playbooks.json")
 
 
 @app.route("/api/response/incidents")

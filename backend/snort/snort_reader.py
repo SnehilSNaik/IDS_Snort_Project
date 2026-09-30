@@ -124,9 +124,8 @@ def parse_alert_block(block: str):
 
     # Normalise timestamp
     try:
-        ts = datetime.strptime(raw_ts, "%m/%d-%H:%M:%S.%f").replace(
-            year=datetime.now().year
-        )
+        current_year = datetime.now().year
+        ts = datetime.strptime(f"{current_year}/{raw_ts}", "%Y/%m/%d-%H:%M:%S.%f")
         timestamp = ts.strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -152,7 +151,7 @@ def parse_alert_block(block: str):
 
 # ── Tail the Snort alert file ─────────────────────────────
 def tail_alert_file():
-    """
+    r"""
     Blocks and reads new lines from C:\Snort\log\alert.ids as Snort appends them.
     Buffers multi-line alert blocks and fires parse_alert_block() on each.
     """

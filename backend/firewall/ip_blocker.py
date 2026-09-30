@@ -209,7 +209,7 @@ class IPBlocker:
             "$ErrorActionPreference='Stop'; $p=New-Object -ComObject HNetCfg.FwPolicy2; "
             "$active=[int]$p.CurrentProfileTypes; $on=($active -ne 0); "
             "foreach($n in @(1,2,4)){if(($active -band $n) -ne 0){$on=$on -and $p.FirewallEnabled($n)}}; "
-            f"$rows=@(foreach($ip in @({literals})){{try{{$r=$p.Rules.Item('IDS_BLOCK_'+$ip.Replace('.','_')); "
+            "$rows=@(foreach($ip in @(" + literals + ")){try{$r=$p.Rules.Item('IDS_BLOCK_'+$ip.Replace('.','_')); "
             "@{ip=$ip; enabled=[bool]$r.Enabled; action=[int]$r.Action; direction=[int]$r.Direction; "
             "protocol=[int]$r.Protocol; local=$r.LocalAddresses; application=$r.ApplicationName; service=$r.ServiceName; "
             "interfaces=$r.InterfaceTypes; "

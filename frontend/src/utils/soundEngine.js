@@ -157,5 +157,23 @@ export const soundEngine = {
     if (!_muted) siren(0, 900, 100, 6, 0.10, 0.20, 'sine', false);
     return _muted;
   },
+  playLow() {
+    if (_muted) return;
+    try {
+      const ctx = getCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const t = ctx.currentTime;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, t);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.15, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.3);
+    } catch(e) {}
+  },
   isMuted: () => _muted
 };

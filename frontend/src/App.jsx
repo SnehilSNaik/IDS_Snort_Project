@@ -62,9 +62,7 @@ export default function App() {
       });
 
       if (isNewArrival) {
-        if (hasCorrelated) soundEngine.playCorrelated();
-        else if (worstSev === 'HIGH') soundEngine.playHigh();
-        else if (worstSev === 'MEDIUM') soundEngine.playMedium();
+        soundEngine.playLow();
       }
 
       setAlerts(newAlerts);
