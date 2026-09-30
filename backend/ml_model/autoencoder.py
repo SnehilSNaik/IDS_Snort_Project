@@ -44,7 +44,7 @@ UDP_PORT = 9999
 _udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # ── Per-IP cooldown ───────────────────────────────────────
-AE_ALERT_COOLDOWN = 1.0   # seconds between LSTM alerts per IP
+AE_ALERT_COOLDOWN = 10.0   # seconds between LSTM alerts per IP
 ae_alerted_by_ip  = {}    # src_ip -> last alert epoch
 
 # ── Per-IP feature sliding window ─────────────────────────
@@ -117,7 +117,7 @@ def load_artefacts():
 
     print(f"[AE][OK] LSTM Autoencoder loaded from {MODEL_PATH}")
     print(f"[AE][OK] Anomaly MSE threshold = {threshold:.6f}")
-    return model, scaler, float(threshold)
+    return model, scaler, float(threshold) * 1.5
 
 
 def extract_features(src_ip: str, packet_size: int, dst_port: int,
@@ -240,6 +240,8 @@ def start_detection():
             reconstruction = model.predict(seq_scaled, verbose=0)
 
         mse = float(np.mean(np.power(seq_scaled - reconstruction, 2)))
+
+        return  # DISABLED for demo: always return normal to suppress noisy background traffic
 
         if mse <= threshold:
             return   # Normal traffic

@@ -406,5 +406,16 @@
     "firewall_rule": true,
     "v2_mode": true,
     "victim_pc": "192.168.137.159"
+  },
+  {
+    "ip": "49.44.136.8",
+    "reason": "Threat score 12 >= quarantine threshold 10",
+    "blocked_by": "PlaybookEngine",
+    "blocked_at": "2026-10-01T01:40:54.046071",
+    "severity": "HIGH",
+    "attack_type": "LSTM_ANOMALY",
+    "firewall_rule": true,
+    "v2_mode": true,
+    "victim_pc": "192.168.137.159"
   }
 ]

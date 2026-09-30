@@ -19,8 +19,8 @@
     "os": "Windows 11",
     "agent_version": "2.0",
     "first_seen": "2026-09-30 16:56:13 UTC",
-    "last_seen": "2026-09-30 19:11:08 UTC",
-    "last_alert_at": null,
-    "alert_count": 0
+    "last_seen": "2026-09-30 20:49:04 UTC",
+    "last_alert_at": "2026-09-30 20:49:04 UTC",
+    "alert_count": 54
   }
 }
