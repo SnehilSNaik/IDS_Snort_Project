@@ -148,3 +148,20 @@ backend/simulate_attack.py       Lab attack simulator
 backend/.env                     API keys (ipinfo.io configured)
 frontend/src/App.jsx             React SPA root
 frontend/src/components/         LiveRadar, IncidentResponse, etc.
+
+## Future Roadmap (V2 Architecture)
+**Goal: Implement a 3-Machine Setup (Attacker, Victim, IDS)**
+
+For the ultimate demonstration, the IDS can be adapted to block attacks directly on a separate Victim machine using **Remote Execution (SSH/WinRM)**.
+
+### Why this is the best approach:
+1. **Zero Network Changes:** No complex routing, virtual switches, or gateway router setup required.
+2. **Minimal Code Changes:** The current codebase already generates the 
+etsh firewall command. You just need to prepend ssh Administrator@<victim_ip> to the command string.
+3. **Realistic Architecture:** Modern SIEMs (Security Information and Event Management systems) work this way—passively monitoring traffic and sending automated commands via SSH/APIs to isolate compromised endpoints.
+
+### Implementation Steps (For Later):
+1. **Enable SSH/WinRM** on the Victim Machine so it accepts remote commands.
+2. **Generate an SSH key** on the IDS machine to allow passwordless login to the Victim Machine.
+3. **Update ackend/firewall/ip_blocker.py**: Modify the _apply_firewall_rule function to run ssh user@victim_ip netsh advfirewall... instead of executing 
+etsh locally.
