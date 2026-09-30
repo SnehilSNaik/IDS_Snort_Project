@@ -9,7 +9,7 @@ export function LiveRadar({ stats, alerts, onRefresh, onClearAlerts, onBlockIP, 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
         <div className="glass-panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px', borderLeft: '4px solid #38bdf8' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#94a3b8', fontSize: '13px', fontWeight: 600 }}>
-            <span>TOTAL ATTACKS</span>
+            <span>INCIDENTS</span>
             <Shield size={18} color="#38bdf8" />
           </div>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: '38px', fontWeight: 800 }}>{stats.total || 0}</div>
@@ -133,12 +133,14 @@ export function LiveRadar({ stats, alerts, onRefresh, onClearAlerts, onBlockIP, 
               <tbody>
                 {alerts && alerts.length > 0 ? (
                   alerts.map((a) => {
-                    const isBlocked = blockedIPs.has(a.src_ip);
+                    const isBlocked = a.block_status === 'blocked_on_monitor';
+                    const hasRule = blockedIPs.has(a.src_ip);
+                    const blockLabel = { blocked_on_monitor: 'Blocked on monitor', ineffective: 'Block ineffective (reported)', monitor_only: 'Monitor rule only — victim not covered', unverified: 'OS block unverified' }[a.block_status];
                     const hasFlowDetails = Boolean(a.flow_features);
                     const isExpanded = expandedAlert === a.id;
                     return (
                       <React.Fragment key={a.id || Math.random()}><tr style={{ borderBottom: '1px solid var(--glass-border)', background: isBlocked ? 'rgba(244,63,94,0.06)' : 'transparent' }}>
-                        <td style={{ padding: '12px 18px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#94a3b8' }}>{a.timestamp}</td>
+                        <td style={{ padding: '12px 18px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#94a3b8' }}>{a.timestamp}<div style={{ marginTop: 5 }}>Last seen: {a.last_seen || a.timestamp}</div><div style={{ marginTop: 5, color: '#38bdf8' }}>Attempts after block: {a.attempts_after_block || 0}</div></td>
                         <td style={{ padding: '12px 18px' }}><span className={`sev-badge sev-${a.severity}`}>{a.severity}</span></td>
                         <td style={{ padding: '12px 18px' }}>
                           <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '6px', background: 'rgba(99,102,241,0.15)', color: '#6366f1' }}>
@@ -150,7 +152,7 @@ export function LiveRadar({ stats, alerts, onRefresh, onClearAlerts, onBlockIP, 
                           <span style={{ color: '#38bdf8', fontSize: '12px', fontWeight: 700, background: 'rgba(56,189,248,0.1)', padding: '2px 8px', borderRadius: '6px' }}>{a.protocol}</span>
                         </td>
                         <td style={{ padding: '12px 18px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: isBlocked ? '#f43f5e' : '#f8fafc' }}>
-                          {a.src_ip} {isBlocked && <span style={{ fontSize: '10px', color: '#f43f5e', background: 'rgba(244,63,94,0.15)', padding: '2px 6px', borderRadius: '8px', marginLeft: '6px' }}>Blocked</span>}
+                          {a.src_ip} {blockLabel && <div style={{ fontSize: '11px', color: isBlocked ? '#10b981' : '#f59e0b', marginTop: 6 }}>{blockLabel}</div>}
                         </td>
                         <td style={{ padding: '12px 18px', fontFamily: 'var(--font-mono)', fontSize: '13px', color: '#94a3b8' }}>{a.dst_ip}</td>
                         <td style={{ padding: '12px 18px', fontSize: '12px', color: '#94a3b8' }}>{a.victim_name ? `Endpoint: ${a.victim_name}` : 'Network IDS'}</td>
@@ -171,7 +173,7 @@ export function LiveRadar({ stats, alerts, onRefresh, onClearAlerts, onBlockIP, 
                         </td>
                         <td style={{ padding: '12px 18px' }}>
                           {hasFlowDetails && <button className="btn" style={{ padding: '5px 8px', marginRight: 6, fontSize: 11 }} onClick={() => setExpandedAlert(isExpanded ? null : a.id)}>{isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />} Flow</button>}
-                          {isBlocked ? (
+                          {hasRule ? (
                             <button className="btn-unblock" onClick={() => onUnblockIP(a.src_ip)}><CheckCircle2 size={12} /> Unblock</button>
                           ) : (
                             <button className="btn-block" onClick={() => onBlockIP(a.src_ip, 'Blocked from Live Stream', a.severity, a.type)}><Ban size={12} /> Block</button>

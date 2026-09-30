@@ -349,7 +349,7 @@ export default function App() {
             blockedIPsList={blockedIPsList}
             onBlockIP={handleBlockIP}
             onUnblockIP={handleUnblockIP}
-            onRefresh={fetchIRData}
+            onRefresh={() => { fetchIRData(); fetchBlockedIPs(); fetchAlerts(); fetchTimeline(); }}
           />
         )}
 

@@ -11,34 +11,34 @@
   },
   {
     "id": "PB-002",
-    "name": "Block High-Confidence LSTM Threat",
-    "description": "Blocks an IP only when the locally trained LSTM Autoencoder reports a high-confidence anomaly.",
+    "name": "Review High-Confidence LSTM Anomaly",
+    "description": "Logs and notifies on a high-confidence LSTM anomaly; a single model alert does not automatically block an IP.",
     "trigger_type": "LSTM_ANOMALY",
     "trigger_severity": "ANY",
     "trigger_confidence_min": 90.0,
-    "actions": ["block_ip", "email_alert", "incident_log"],
+    "actions": ["email_alert", "incident_log"],
     "enabled": true
   },
   {
     "id": "PB-005",
-    "name": "Block DNS Tunnel",
-    "description": "Automatically blocks the source IP when a DNS tunneling attempt is detected.",
+    "name": "Review DNS Tunnel Signal",
+    "description": "Logs and notifies on a DNS tunneling signal; repeated or corroborated evidence is required before blocking.",
     "trigger_type": "DNS_TUNNEL",
     "trigger_severity": "HIGH",
     "trigger_confidence_min": 85.0,
-    "actions": ["block_ip", "email_alert", "incident_log"],
+    "actions": ["email_alert", "incident_log"],
     "enabled": true
   },
   {
     "id": "PB-006",
-    "name": "Threat Score Auto-Quarantine",
-    "description": "Blocks IP automatically when its cumulative threat score reaches or exceeds the quarantine threshold (default: 10).",
+    "name": "Threat Score Auto-Quarantine (disabled for medium sensitivity)",
+    "description": "Disabled because cumulative scores persist and could eventually block a benign source. Correlated or repeated Snort detections remain eligible for automatic response.",
     "trigger_type": "THREAT_SCORE_EXCEEDED",
     "trigger_severity": "ANY",
     "trigger_confidence_min": 0.0,
     "quarantine_threshold": 10,
     "actions": ["block_ip", "telegram_alert", "email_alert", "incident_log"],
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "PB-007",

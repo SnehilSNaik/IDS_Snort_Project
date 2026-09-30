@@ -5,6 +5,25 @@ export function IncidentResponse({ scores, incidents, playbooks, blockedIPsList,
   const [activeSubTab, setActiveSubTab] = useState('scores');
   const [manualIP, setManualIP] = useState('');
   const [manualReason, setManualReason] = useState('');
+  const [test, setTest] = useState({ source: '', target: '', note: '', result: '' });
+  const [testMessage, setTestMessage] = useState('');
+  const [savingTest, setSavingTest] = useState(false);
+
+  const saveTest = async (event) => {
+    event.preventDefault();
+    setSavingTest(true);
+    try {
+      const response = await fetch(`/api/firewall/reachability/${encodeURIComponent(test.source)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_ip: test.target.trim(), note: test.note.trim(), reachable: test.result === 'reachable' }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not save test');
+      setTestMessage(test.result === 'reachable' ? 'Block ineffective: operator-reported access succeeded. Alert suppression is disabled for this target.' : 'Unreachable result recorded. This does not by itself prove the firewall caused it.');
+      onRefresh();
+    } catch (error) { setTestMessage(error.message); }
+    finally { setSavingTest(false); }
+  };
 
   const handleManualBlock = (e) => {
     e.preventDefault();
@@ -185,8 +204,9 @@ export function IncidentResponse({ scores, incidents, playbooks, blockedIPsList,
       {/* Firewall Panel */}
       <div className="glass-panel" style={{ padding: '20px' }}>
         <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Lock size={18} color="#f43f5e" /> IP Firewall — Active OS Rules
+          <Lock size={18} color="#f43f5e" /> IP Firewall — Monitoring PC
         </h3>
+        <p style={{ color: '#94a3b8', fontSize: 13, marginBottom: 16 }}>Rules apply to inbound traffic on this PC. Separate victims need their own firewall or an enforcing gateway. Rule checks confirm configuration; test service access from Kali to check effectiveness.</p>
         
         <form onSubmit={handleManualBlock} style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
           <input
@@ -222,7 +242,7 @@ export function IncidentResponse({ scores, incidents, playbooks, blockedIPsList,
                   <tr key={e.ip} style={{ borderBottom: '1px solid var(--glass-border)', background: 'rgba(244,63,94,0.04)' }}>
                     <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#f43f5e' }}>{e.ip}</td>
                     <td style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#94a3b8' }}>{e.blocked_at}</td>
-                    <td style={{ padding: '10px 14px', fontSize: '12px', color: '#94a3b8' }}>{e.reason}</td>
+                    <td style={{ padding: '10px 14px', fontSize: '12px', color: '#94a3b8' }}>{e.reason}<div style={{ marginTop: 5, color: e.firewall_rule ? '#10b981' : '#f59e0b' }}>{e.firewall_rule ? 'Inbound rule verified on monitoring PC' : 'OS rule unverified — alerts remain enabled'}</div>{Object.entries(e.reachability_checks || {}).map(([ip, result]) => <div key={ip} style={{ marginTop: 5, color: result.reachable ? '#f43f5e' : '#94a3b8' }}>{ip}: {result.reachable ? 'Block ineffective' : 'Service unreachable'} (operator reported) · {result.note} · {result.checked_at}</div>)}</td>
                     <td style={{ padding: '10px 14px' }}>
                       <button className="btn-unblock" onClick={() => onUnblockIP(e.ip)}><CheckCircle2 size={12} /> Unblock</button>
                     </td>
@@ -234,6 +254,15 @@ export function IncidentResponse({ scores, incidents, playbooks, blockedIPsList,
             </tbody>
           </table>
         </div>
+        <form onSubmit={saveTest} style={{ marginTop: 20, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <strong style={{ width: '100%' }}>Record a test performed from Kali</strong>
+          <select aria-label="Test attacker IP" required value={test.source} onChange={e => setTest({ ...test, source: e.target.value })}><option value="">Select attacker IP</option>{(blockedIPsList || []).map(e => <option key={e.ip} value={e.ip}>{e.ip}</option>)}</select>
+          <input aria-label="Test target monitoring PC IP" required placeholder="Monitoring PC IP" value={test.target} onChange={e => setTest({ ...test, target: e.target.value })} />
+          <input aria-label="Tested service and evidence" required maxLength={500} placeholder="Service/port and result evidence" value={test.note} onChange={e => setTest({ ...test, note: e.target.value })} />
+          <select aria-label="Service reachability result" required value={test.result} onChange={e => setTest({ ...test, result: e.target.value })}><option value="">Choose observed result</option><option value="reachable">Access succeeded after block</option><option value="unreachable">Service unreachable after block</option></select>
+          <button className="btn" type="submit" disabled={savingTest}>{savingTest ? 'Saving…' : 'Save test result'}</button>
+          {testMessage && <div role="status" style={{ width: '100%', color: '#f59e0b' }}>{testMessage}</div>}
+        </form>
       </div>
     </div>
   );

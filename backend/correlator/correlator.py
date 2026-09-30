@@ -20,6 +20,7 @@ import json
 import time
 import socket
 import threading
+import uuid
 from collections import deque
 from datetime import datetime
 
@@ -36,8 +37,13 @@ sys.path.insert(0, BASE_DIR)
 from email_alert.send_alert import send_email_alert
 from telegram_alert.telegram_bot import send_telegram_in_background
 from endpoints.registry import register as register_endpoint, touch_alert
-from persistence.event_store import record_alert, record_stage
+from persistence.event_store import record_alert, record_stage, record_post_block_attempt
+from correlator.incident_identity import incident_key, victim_key, covered_by_block
 from mitre.mapping import enrich as enrich_mitre
+from firewall.ip_blocker import IPBlocker as _IPBlocker
+
+# Shared blocker instance — reloads from disk automatically when blocked_ips.json changes
+_blocker = _IPBlocker()
 
 # Threat Intelligence enrichment (async, non-blocking)
 try:
@@ -61,8 +67,8 @@ ALERTS_JSON = os.path.join(BASE_DIR, "alerts", "alerts.json")
 COUNT_JSON  = os.path.join(BASE_DIR, "alerts", "count.json")
 UDP_IP = "0.0.0.0"
 UDP_PORT = 9999
-CORRELATION_WINDOW = 0.5  # seconds
-DEDUP_WINDOW       = 2.0  # seconds — suppress near-identical alerts from same IP+engine+severity
+CORRELATION_WINDOW = 3.0  # seconds allowed between Snort and flow-ML detections
+DEDUP_WINDOW       = 2.0  # seconds for repeated alerts with the same source/type/severity/protocol
 
 # All recognised alert types (extend here when adding new detectors)
 KNOWN_ALERT_TYPES = {
@@ -137,11 +143,13 @@ def load_alerts():
             with open(ALERTS_JSON, "r") as f:
                 raw = json.load(f)
             # Strip any stale HEARTBEAT entries persisted before the filter was added
-            alerts_list = [a for a in raw if a.get("type") != "HEARTBEAT"]
+            alerts_list = deque(
+                (a for a in raw if a.get("type") != "HEARTBEAT"), maxlen=500
+            )
         except Exception:
-            alerts_list = []
+            alerts_list = deque(maxlen=500)
     else:
-        alerts_list = []
+        alerts_list = deque(maxlen=500)
 
 
 def save_alerts():
@@ -191,8 +199,7 @@ def save_count():
 def process_alert(new_alert):
     global alerts_list, tick_high, tick_medium, tick_low
 
-    # Endpoint enrollment is transported through the same authenticated lab
-    # channel as alerts, but is stored separately from the alert stream.
+    # Endpoint enrollment shares the lab alert channel and is stored separately.
     if new_alert.get("type") in {"ENDPOINT_REGISTER", "ENDPOINT_HEARTBEAT"}:
         register_endpoint(new_alert, new_alert.get("sender_ip", ""))
         return
@@ -218,52 +225,80 @@ def process_alert(new_alert):
     engine = new_alert.get("type", "UNKNOWN")
     now    = time.time()
 
+    # Keep observing blocked sources; only suppress repeated response actions.
+    block_entry = _blocker.get_entry(src_ip)
+    source_enforced_block = covered_by_block(new_alert, block_entry)
+
     # Auto-assign timestamp if missing — prevents sorting failures in dashboard
     if not new_alert.get("timestamp"):
         new_alert["timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     enrich_mitre(new_alert)
+    key = incident_key(new_alert)
+    scope_key = (src_ip, *victim_key(new_alert), new_alert.get("protocol", ""))
 
     with lock:
-        cache = ip_cache.get(src_ip, {})
-        other_engine = "ML_ANOMALY" if engine == "SNORT_SIGNATURE" else "SNORT_SIGNATURE"
-        
-        # Deduplication: drop if same engine already fired for this IP within the window
-        if engine in cache:
-            if now - cache[engine]["time"] < CORRELATION_WINDOW:
-                return  # Too soon — drop duplicate
+        # Count every detector alert after a verified block, before short-term dedup.
+        # This counts observations, not packets proven dropped by Windows.
+        if source_enforced_block:
+            for previous in reversed(alerts_list):
+                keys = previous.get("detection_keys", [incident_key(previous)])
+                if key in keys and previous.get("block_epoch", block_entry["blocked_at"]) != block_entry["blocked_at"]:
+                    break  # New block lifecycle: don't resurrect an older incident.
+                if key in keys and previous.get("block_epoch", block_entry["blocked_at"]) == block_entry["blocked_at"]:
+                    previous.setdefault("id", f"{previous.get('timestamp')}:{src_ip}:{previous.get('type')}")
+                    previous["block_epoch"] = block_entry["blocked_at"]
+                    previous["block_status"] = "blocked_on_monitor"
+                    previous["attempts_after_block"] = previous.get("attempts_after_block", 0) + 1
+                    previous["last_seen"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    record_post_block_attempt(previous, new_alert)
+                    save_alerts()
+                    return
 
-        # Content-based dedup: suppress near-identical alerts
-        # (same src_ip + engine + severity + protocol) within DEDUP_WINDOW
+        new_alert["id"] = str(uuid.uuid4())
+        new_alert["detection_keys"] = [key]
+        new_alert["last_seen"] = new_alert["timestamp"]
+        new_alert["attempts_after_block"] = 0
+        if source_enforced_block:
+            new_alert["block_status"] = "blocked_on_monitor"
+            new_alert["block_epoch"] = block_entry["blocked_at"]
+            new_alert["attempts_after_block"] = 1
+        cache = ip_cache.get(scope_key, {})
+        other_engine = "ML_ANOMALY" if engine == "SNORT_SIGNATURE" else "SNORT_SIGNATURE"
+
+        # Content-based dedup: only active when DEDUP_WINDOW > 0
         sev   = new_alert.get("severity", "LOW")
         proto = new_alert.get("protocol", "")
-        dedup_key = (src_ip, engine, sev, proto)
-        last_dedup = dedup_cache.get(dedup_key, 0)
-        if now - last_dedup < DEDUP_WINDOW:
-            return  # near-identical alert suppressed
+        dedup_key = (*key, sev)
+        if DEDUP_WINDOW > 0:
+            last_dedup = dedup_cache.get(dedup_key, 0)
+            if now - last_dedup < DEDUP_WINDOW:
+                return  # near-identical alert suppressed
         dedup_cache[dedup_key] = now
         
-        # 2. Check for correlation within 2 seconds
-        if other_engine in cache:
+        # 2. Snort+ML cross-engine correlation (only when window > 0 and both are sig/anomaly types)
+        CORR_PAIR = {"SNORT_SIGNATURE", "ML_ANOMALY"}
+        if CORRELATION_WINDOW > 0 and engine in CORR_PAIR and other_engine in cache:
             time_diff = now - cache[other_engine]["time"]
-            
+
             if time_diff <= CORRELATION_WINDOW:
                 # MATCH! Merge them.
                 orig_alert = cache[other_engine]["ref"]
-                
+
                 # We only upgrade if it hasn't already been correlated
                 if orig_alert.get("type") != "CORRELATED_ATTACK":
+                    orig_alert.setdefault("detection_keys", [incident_key(orig_alert)]).append(key)
                     orig_alert["type"] = "CORRELATED_ATTACK"
                     orig_alert["severity"] = "HIGH"
                     orig_alert["confidence"] = 99.0
                     orig_alert["message"] = f"[!] CORRELATED ATTACK: Signature + Anomaly match for {src_ip}"
                     enrich_mitre(orig_alert)
-                    
+
                     # Update cache to point to the merged alert and reset timer
-                    ip_cache[src_ip] = {
+                    ip_cache[scope_key] = {
                         engine: {"time": now, "ref": orig_alert},
                         other_engine: {"time": now, "ref": orig_alert}
                     }
-                    
+
                     save_alerts()
                     record_alert(orig_alert)
                     record_stage(src_ip, "CORRELATED", "Multi-engine correlation confirmed", "Snort signature and ML anomaly matched", "HIGH", orig_alert.get("endpoint_id"))
@@ -276,15 +311,24 @@ def process_alert(new_alert):
 
                     # Telegram real-time alert (non-blocking)
                     send_telegram_in_background(orig_alert)
-                return
+                    if (not source_enforced_block and _PLAYBOOK_AVAILABLE
+                            and _playbook_engine is not None):
+                        threading.Thread(
+                            target=_playbook_engine.evaluate,
+                            args=(dict(orig_alert),),
+                            daemon=True,
+                        ).start()
+                    return  # merged — don't add as separate alert
+                if key in orig_alert.get("detection_keys", []):
+                    return
 
         # 3. No match found within window. Add as separate alert.
         touch_alert(new_alert)
         alerts_list.append(new_alert)
         # deque(maxlen=500) auto-evicts oldest entry — no manual size check needed
 
-        ip_cache[src_ip] = cache
-        ip_cache[src_ip][engine] = {"time": now, "ref": new_alert}
+        ip_cache[scope_key] = cache
+        ip_cache[scope_key][engine] = {"time": now, "ref": new_alert}
 
         # Increment severity counters so dashboard stats stay accurate
         sev = new_alert.get("severity", "LOW")
@@ -293,7 +337,10 @@ def process_alert(new_alert):
         else:                 tick_low    += 1
 
         save_alerts()
-        record_alert(new_alert)
+        if source_enforced_block:
+            record_post_block_attempt(new_alert, dict(new_alert))
+        else:
+            record_alert(new_alert)
 
         # Server-side beep for HIGH / MEDIUM alerts
         if   sev == "HIGH":   _sound_alert('high')
@@ -301,13 +348,15 @@ def process_alert(new_alert):
 
         # Telegram real-time alert for HIGH/MEDIUM (non-blocking, rate-limited per IP)
         send_telegram_in_background(new_alert)
+        threading.Thread(target=send_email_alert, args=(dict(new_alert),), daemon=True).start()
 
         # ── Threat Intelligence enrichment (async — non-blocking) ──
         if _TI_AVAILABLE:
             enrich_alert_async(new_alert, alerts_list, lock, save_alerts)
 
         # ── Incident Response Playbook evaluation (async) ──────────
-        if _PLAYBOOK_AVAILABLE and _playbook_engine is not None:
+        if (not source_enforced_block and _PLAYBOOK_AVAILABLE
+                and _playbook_engine is not None):
             threading.Thread(
                 target=_playbook_engine.evaluate,
                 args=(dict(new_alert),),

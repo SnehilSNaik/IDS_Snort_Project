@@ -9,6 +9,7 @@ services:
       - ./backend/response:/app/response
       - ./backend/firewall:/app/firewall
       - ./backend/endpoints:/app/endpoints
+      - ./backend/data:/app/data
     environment:
       - IDS_SECRET_KEY=${IDS_SECRET_KEY:-change-this-before-any-non-demo-use}
 
@@ -22,6 +23,7 @@ services:
       - ./backend/response:/app/response
       - ./backend/firewall:/app/firewall
       - ./backend/endpoints:/app/endpoints
+      - ./backend/data:/app/data
 
   frontend:
     image: node:20-alpine

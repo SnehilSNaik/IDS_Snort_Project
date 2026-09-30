@@ -4,14 +4,8 @@ network_monitor/dns_monitor.py  —  IDS_Snort_Project
 =============================================================
 DNS Tunneling Detector.
 
-Detection Techniques:
-  1. Shannon Entropy       — subdomains with entropy > 3.5 bits/char
-     are likely Base64/Hex-encoded payloads (C2 exfiltration).
-  2. Abnormal Label Length — DNS labels > 50 chars → suspicious.
-  3. Query Flood           — > 30 unique DNS queries per minute
-     from same IP → DNS tunnel data transfer rate.
-  4. Payload Size Anomaly  — DNS UDP packets > 512 bytes
-     (violates the original DNS spec).
+Detection profile: medium sensitivity. A single unusual feature is treated
+as a supporting signal; sustained rates and stronger anomalies are preferred.
 
 Alerts sent to Correlator via UDP 9999 as:
   type=DNS_TUNNEL   severity=HIGH/MEDIUM
@@ -41,16 +35,17 @@ UDP_PORT = 9999
 _udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # ── Detection thresholds ─────────────────────────────────
-ENTROPY_THRESHOLD   = 3.5    # bits/char — above = suspicious
-MAX_LABEL_LEN       = 50     # chars — above = suspicious
+ENTROPY_THRESHOLD   = 4.2    # bits/char
+MIN_ENTROPY_LABEL_LEN = 20   # avoid classifying short, naturally variable labels
+MAX_LABEL_LEN       = 50     # valid DNS labels may be up to 63 chars
 QUERY_FLOOD_WINDOW  = 60.0   # seconds
-QUERY_FLOOD_LIMIT   = 30     # queries per window per IP
-DNS_PAYLOAD_LIMIT   = 512    # bytes — over = alert
+QUERY_FLOOD_LIMIT   = 180    # queries per 60s per source (~3 queries/s sustained)
+DNS_PAYLOAD_LIMIT   = 1300   # captured IP packet bytes; above routine DNS/EDNS query sizes
 
 # ── Per-IP query tracking ─────────────────────────────────
 query_times_by_ip: dict[str, deque] = defaultdict(lambda: deque())
 alert_cooldown: dict[str, float]    = {}   # ip+type -> last alert time
-ALERT_COOLDOWN = 10.0
+ALERT_COOLDOWN = 60.0
 
 
 def get_local_ip() -> str:
@@ -123,6 +118,15 @@ def process_dns(packet):
         now     = time.time()
         pkt_size = len(packet)
 
+        # ── Skip traffic from the IDS machine itself (not an attacker) ──
+        if src_ip == LOCAL_IP or src_ip.startswith("127."):
+            return
+
+        # This detector evaluates client queries only. DNS responses are not
+        # counted as source query activity and are handled by Snort rules.
+        if dns_pkt.qr != 0:   # 0=query, 1=response
+            return
+
         # ── Track query rate per source IP ────────────────────
         q = query_times_by_ip[src_ip]
         q.append(now)
@@ -134,10 +138,10 @@ def process_dns(packet):
         if pkt_size > DNS_PAYLOAD_LIMIT:
             key = f"{src_ip}:size"
             if _can_alert(key, now):
-                msg = (f"[!] DNS Payload Size Anomaly from {src_ip}: "
-                       f"{pkt_size}B (limit {DNS_PAYLOAD_LIMIT}B) — possible DNS tunnel/amplification")
+                msg = (f"[!] Oversized DNS Query from {src_ip}: "
+                       f"{pkt_size}B (limit {DNS_PAYLOAD_LIMIT}B) — possible tunneling activity")
                 print(f"[DNS SIZE] {msg}")
-                alert = _make_alert(src_ip, dst_ip, "HIGH", 85.0, msg)
+                alert = _make_alert(src_ip, dst_ip, "MEDIUM", 78.0, msg)
                 _send_alert(alert)
 
         # ── 2. Query Flood ─────────────────────────────────────
@@ -149,14 +153,11 @@ def process_dns(packet):
                         f"{query_count} queries in {QUERY_FLOOD_WINDOW}s ({rate}/s) "
                         f"— likely DNS tunneling")
                 print(f"[DNS FLOOD] {msg}")
-                alert = _make_alert(src_ip, dst_ip, "HIGH", 90.0, msg)
+                alert = _make_alert(src_ip, dst_ip, "HIGH", 88.0, msg)
                 _send_alert(alert)
                 return  # Already flagged — no need to check entropy
 
-        # ── 3. Entropy & Label Length (DNS query packets only) ──
-        if dns_pkt.qr != 0:   # 0=query, 1=response — only check queries
-            return
-
+        # ── 3. Entropy & Label Length ──────────────────────────
         qcount = dns_pkt.qdcount
         for i in range(qcount):
             try:
@@ -190,15 +191,15 @@ def process_dns(packet):
                             _send_alert(alert)
 
                     # Entropy check
-                    if entropy > ENTROPY_THRESHOLD:
+                    if label_len >= MIN_ENTROPY_LABEL_LEN and entropy > ENTROPY_THRESHOLD:
                         key = f"{src_ip}:entropy"
                         if _can_alert(key, now):
                             msg = (f"[!] High-Entropy DNS Query from {src_ip}: "
                                    f"subdomain '{label[:30]}' (entropy={entropy:.2f} bits/char) "
                                    f"in {qname} — likely Base64/Hex encoded C2 channel")
                             print(f"[DNS ENTROPY] {msg}")
-                            sev  = "HIGH" if entropy > 4.5 else "MEDIUM"
-                            conf = round(min(97.0, 65.0 + (entropy - ENTROPY_THRESHOLD) * 10), 1)
+                            sev  = "HIGH" if entropy >= 4.7 and label_len >= 24 else "MEDIUM"
+                            conf = round(min(90.0, 70.0 + (entropy - ENTROPY_THRESHOLD) * 10), 1)
                             alert = _make_alert(src_ip, dst_ip, sev, conf, msg)
                             _send_alert(alert)
             except Exception:
@@ -217,7 +218,8 @@ def start_dns_monitor():
     print("  DNS Tunneling Monitor — IDS_Snort_Project")
     print("=" * 70)
     print(f"  Filter     : UDP port 53 (DNS)")
-    print(f"  Entropy thr: > {ENTROPY_THRESHOLD} bits/char")
+    print(f"  Profile    : medium sensitivity")
+    print(f"  Entropy thr: > {ENTROPY_THRESHOLD} bits/char and label >= {MIN_ENTROPY_LABEL_LEN} chars")
     print(f"  Flood thr  : > {QUERY_FLOOD_LIMIT} queries / {QUERY_FLOOD_WINDOW}s")
     print(f"  Label max  : {MAX_LABEL_LEN} chars")
     print(f"  Alerts to  : UDP {UDP_IP}:{UDP_PORT}")

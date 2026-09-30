@@ -168,15 +168,17 @@ class PlaybookEngine:
         if not self._blocker:
             return
         try:
-            if not self._blocker.is_blocked(ip):
-                self._blocker.block_ip(
+            entry = self._blocker.get_entry(ip)
+            if not entry or not entry.get("firewall_rule"):
+                entry = self._blocker.block_ip(
                     ip,
                     reason=reason,
                     blocked_by="PlaybookEngine",
                     severity=alert.get("severity", "HIGH"),
                     attack_type=alert.get("type", "UNKNOWN"),
                 )
-                print(f"[PLAYBOOK][AUTO-BLOCK] {ip} — {reason}")
+                state = "Windows Firewall enforced" if entry.get("firewall_rule") else "software-only; Windows Firewall did not confirm"
+                print(f"[PLAYBOOK][AUTO-BLOCK] {ip} — {reason} ({state})")
         except Exception as e:
             print(f"[PLAYBOOK] Block error for {ip}: {e}")
 

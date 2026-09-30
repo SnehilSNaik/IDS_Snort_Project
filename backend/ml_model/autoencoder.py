@@ -68,6 +68,24 @@ def get_local_ip():
 
 LOCAL_IP = get_local_ip()
 
+# Derive the /24 subnet prefix (e.g. "172.20.10.") to detect gateway/infra IPs
+_local_prefix = ".".join(LOCAL_IP.split(".")[:3]) + "."
+
+# IPs that should NEVER be flagged — router (.1), broadcast (.255), loopback
+LOCAL_WHITELIST = {
+    _local_prefix + "1",    # default gateway / router
+    _local_prefix + "255",  # subnet broadcast
+    "127.0.0.1",
+    "0.0.0.0",
+}
+
+# Load the shared firewall blocker so we can skip already-blocked IPs
+try:
+    from firewall.ip_blocker import IPBlocker as _IPBlocker
+    _blocker = _IPBlocker()
+except Exception:
+    _blocker = None
+
 
 def send_alert(alert: dict):
     try:
@@ -175,6 +193,13 @@ def start_detection():
         if dst_ip.endswith(".255"):                   return
         if dst_ip.startswith("127.") or dst_ip.startswith("169.254."): return
         if src_ip == LOCAL_IP and not packet.haslayer(ICMP): return
+
+        # Skip whitelisted infrastructure IPs (router, gateway, broadcast)
+        if src_ip in LOCAL_WHITELIST:                 return
+        if src_ip.startswith("169.254."):             return
+
+        # Skip already-blocked IPs (correlator will suppress them too)
+        if _blocker and _blocker.is_blocked(src_ip):  return
 
         # Skip common web traffic
         if packet.haslayer(TCP):

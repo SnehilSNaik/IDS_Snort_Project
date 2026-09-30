@@ -8,10 +8,10 @@ import hashlib
 from datetime import datetime, timezone
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_DIR = os.path.join(BASE_DIR, "data")
+DB_DIR = os.environ.get("IDS_DATA_DIR", os.path.join(BASE_DIR, "data"))
 DB_PATH = os.path.join(DB_DIR, "ids.db")
-ALERTS_JSON = os.path.join(BASE_DIR, "alerts", "alerts.json")
-ENDPOINTS_JSON = os.path.join(BASE_DIR, "endpoints", "endpoints.json")
+ALERTS_JSON = os.environ.get("IDS_ALERTS_JSON", os.path.join(BASE_DIR, "alerts", "alerts.json"))
+ENDPOINTS_JSON = os.environ.get("IDS_ENDPOINTS_JSON", os.path.join(BASE_DIR, "endpoints", "endpoints.json"))
 _lock = threading.RLock()
 
 
@@ -19,9 +19,17 @@ def _now():
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
+class _Connection(sqlite3.Connection):
+    def __exit__(self, *args):
+        try:
+            return super().__exit__(*args)
+        finally:
+            self.close()
+
+
 def _connect():
     os.makedirs(DB_DIR, exist_ok=True)
-    con = sqlite3.connect(DB_PATH, timeout=5)
+    con = sqlite3.connect(DB_PATH, timeout=5, factory=_Connection)
     con.row_factory = sqlite3.Row
     return con
 
@@ -39,6 +47,10 @@ def initialize():
               endpoint_id TEXT PRIMARY KEY, name TEXT, hostname TEXT, ip TEXT,
               os TEXT, agent_version TEXT, first_seen TEXT, last_seen TEXT,
               last_alert_at TEXT, alert_count INTEGER DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS post_block_attempts (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, incident_id TEXT NOT NULL,
+              received_at TEXT NOT NULL, payload_json TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS timeline_events (
               id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, src_ip TEXT,
@@ -118,6 +130,18 @@ def _ti_detail(alert):
     return " · ".join(parts) or "Lookup completed"
 
 
+def record_post_block_attempt(incident, observation):
+    """Update one incident while retaining raw evidence and an append-only audit."""
+    initialize()
+    with _lock, _connect() as con:
+        record_alert(incident, con=con, timeline=False)
+        cur = con.execute("INSERT INTO post_block_attempts(incident_id,received_at,payload_json) VALUES(?,?,?)",
+                          (str(incident["id"]), _now(), json.dumps(observation)))
+        record_audit("POST_BLOCK_ATTEMPT", incident.get("src_ip", ""),
+                     json.dumps({"observation_id": cur.lastrowid, "incident_id": incident["id"],
+                                 "observation": observation}, sort_keys=True), con=con)
+
+
 def record_stage(src_ip, stage, title, detail, severity="INFO", endpoint_id=None):
     initialize()
     with _lock, _connect() as con:
@@ -174,7 +198,7 @@ def upsert_endpoint(endpoint, con=None):
     endpoint_id = str(endpoint.get("endpoint_id") or endpoint.get("hostname") or endpoint.get("ip"))
     values = (endpoint_id, endpoint.get("name", endpoint_id), endpoint.get("hostname", endpoint_id), endpoint.get("ip", "Unknown"), endpoint.get("os", "Unknown"), endpoint.get("agent_version", "Unknown"), endpoint.get("first_seen", _now()), endpoint.get("last_seen", _now()), endpoint.get("last_alert_at"), int(endpoint.get("alert_count", 0)))
     sql = """INSERT INTO endpoints(endpoint_id,name,hostname,ip,os,agent_version,first_seen,last_seen,last_alert_at,alert_count)
-             VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(endpoint_id) DO UPDATE SET name=excluded.name,hostname=excluded.hostname,ip=excluded.ip,os=excluded.os,agent_version=excluded.agent_version,last_seen=excluded.last_seen"""
+             VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(endpoint_id) DO UPDATE SET name=excluded.name,hostname=excluded.hostname,ip=excluded.ip,os=excluded.os,agent_version=excluded.agent_version,last_seen=excluded.last_seen,last_alert_at=COALESCE(excluded.last_alert_at,endpoints.last_alert_at),alert_count=MAX(excluded.alert_count,endpoints.alert_count)"""
     if con is not None: con.execute(sql, values); return
     with _lock, _connect() as db: db.execute(sql, values)
 
@@ -199,6 +223,7 @@ def clear_alert_history():
     initialize()
     with _lock, _connect() as con:
         con.execute("DELETE FROM alerts"); con.execute("DELETE FROM timeline_events")
+        con.execute("DELETE FROM post_block_attempts")
         con.execute("DELETE FROM audit_log")
 
 

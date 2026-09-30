@@ -18,11 +18,27 @@ Public API:
 =============================================================
 """
 
+import ctypes
 import json
+import ipaddress
 import os
 import subprocess
+import sys
 import threading
+import time
 from datetime import datetime
+
+
+def _is_admin() -> bool:
+    """Return True if the current process has Windows Administrator privileges."""
+    if os.name != "nt":
+        return False
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 
 BASE_DIR         = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BLOCKED_IPS_FILE = os.path.join(BASE_DIR, "firewall", "blocked_ips.json")
@@ -36,6 +52,7 @@ class IPBlocker:
         self._lock = threading.Lock()
         self._blocked: dict[str, dict] = {}   # ip -> entry dict
         self._file_mtime: float = 0.0          # mtime of last successful load
+        self._verification = {}
         self._load()
 
     # ------------------------------------------------------------------
@@ -65,11 +82,14 @@ class IPBlocker:
         correlator or other processes.
         """
         if not os.path.exists(BLOCKED_IPS_FILE):
+            self._blocked = {}
+            self._verification.clear()
             return
         try:
             mtime = os.path.getmtime(BLOCKED_IPS_FILE)
-            if mtime > self._file_mtime:
+            if mtime != self._file_mtime:
                 self._load()
+                self._verification.clear()
         except OSError:
             pass
 
@@ -80,6 +100,7 @@ class IPBlocker:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(list(self._blocked.values()), f, indent=2)
             os.replace(tmp, BLOCKED_IPS_FILE)
+            self._file_mtime = os.path.getmtime(BLOCKED_IPS_FILE)
         except Exception as e:
             print(f"[FIREWALL] Warning: could not save blocked IPs: {e}")
 
@@ -87,11 +108,22 @@ class IPBlocker:
     # Windows Firewall integration (best-effort, requires admin)
     # ------------------------------------------------------------------
     @staticmethod
+    def _rule_name(ip: str) -> str:
+        """Sanitise an IP address (IPv4 or IPv6) into a valid Windows Firewall rule name."""
+        return f"{FIREWALL_RULE_PREFIX}{ip.replace('.', '_').replace(':', '_')}"
+
+    @staticmethod
     def _apply_firewall_rule(ip: str) -> bool:
-        """Create a Windows Firewall inbound block rule for the given IP."""
-        rule_name = f"{FIREWALL_RULE_PREFIX}{ip.replace('.', '_')}"
+        """Create a Windows Firewall inbound block rule for the given IP.
+        Requires Administrator privileges. Returns False immediately if not elevated
+        so Flask is never blocked waiting on a UAC prompt.
+        """
+        if not _is_admin():
+            print(f"[FIREWALL] Skipping OS rule for {ip} — not running as Administrator.")
+            return False
+        rule_name = IPBlocker._rule_name(ip)
         try:
-            subprocess.run(
+            result = subprocess.run(
                 [
                     "netsh", "advfirewall", "firewall", "add", "rule",
                     f"name={rule_name}",
@@ -103,10 +135,18 @@ class IPBlocker:
                     "profile=any",
                 ],
                 capture_output=True,
-                timeout=5,
+                timeout=3,
+                creationflags=_NO_WINDOW,
             )
+            if result.returncode != 0:
+                error = (result.stderr or result.stdout or b"").decode("utf-8", errors="replace").strip()
+                print(f"[FIREWALL] Windows Firewall rejected rule for {ip}: {error or 'netsh failed'}")
+                return False
             print(f"[FIREWALL] Windows Firewall rule added: block inbound from {ip}")
             return True
+        except subprocess.TimeoutExpired:
+            print(f"[FIREWALL] netsh timed out adding rule for {ip} — run as Administrator.")
+            return False
         except Exception as e:
             print(f"[FIREWALL] Could not add firewall rule (may need admin): {e}")
             return False
@@ -114,18 +154,29 @@ class IPBlocker:
     @staticmethod
     def _remove_firewall_rule(ip: str) -> bool:
         """Remove the Windows Firewall block rule for the given IP."""
-        rule_name = f"{FIREWALL_RULE_PREFIX}{ip.replace('.', '_')}"
+        if not _is_admin():
+            print(f"[FIREWALL] Skipping OS rule removal for {ip} — not running as Administrator.")
+            return False
+        rule_name = IPBlocker._rule_name(ip)
         try:
-            subprocess.run(
+            result = subprocess.run(
                 [
                     "netsh", "advfirewall", "firewall", "delete", "rule",
                     f"name={rule_name}",
                 ],
                 capture_output=True,
-                timeout=5,
+                timeout=3,
+                creationflags=_NO_WINDOW,
             )
+            if result.returncode != 0:
+                error = (result.stderr or result.stdout or b"").decode("utf-8", errors="replace").strip()
+                print(f"[FIREWALL] Windows Firewall could not remove rule for {ip}: {error or 'netsh failed'}")
+                return False
             print(f"[FIREWALL] Windows Firewall rule removed for {ip}")
             return True
+        except subprocess.TimeoutExpired:
+            print(f"[FIREWALL] netsh timed out removing rule for {ip}.")
+            return False
         except Exception as e:
             print(f"[FIREWALL] Could not remove firewall rule: {e}")
             return False
@@ -133,6 +184,83 @@ class IPBlocker:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+    @staticmethod
+    def _verify_firewall_rule(ip):
+        """Read effective Windows policy, not the saved JSON success flag."""
+        ip = str(ipaddress.ip_address(ip))
+        return IPBlocker._verify_many([ip]).get(ip, False)
+
+    @staticmethod
+    def _verify_many(ips):
+        """One policy query for dashboard polling, rather than a process per IP."""
+        result_map = {ip: False for ip in ips}
+        if os.name != "nt":
+            return result_map
+        valid = []
+        for ip in ips:
+            try:
+                valid.append(str(ipaddress.ip_address(ip)))
+            except ValueError:
+                pass
+        if not valid:
+            return result_map
+        literals = ','.join("'" + ip + "'" for ip in valid)
+        command = (
+            "$ErrorActionPreference='Stop'; $p=New-Object -ComObject HNetCfg.FwPolicy2; "
+            "$active=[int]$p.CurrentProfileTypes; $on=($active -ne 0); "
+            "foreach($n in @(1,2,4)){if(($active -band $n) -ne 0){$on=$on -and $p.FirewallEnabled($n)}}; "
+            f"$rows=@(foreach($ip in @({literals})){{try{{$r=$p.Rules.Item('IDS_BLOCK_'+$ip.Replace('.','_')); "
+            "@{ip=$ip; enabled=[bool]$r.Enabled; action=[int]$r.Action; direction=[int]$r.Direction; "
+            "protocol=[int]$r.Protocol; local=$r.LocalAddresses; application=$r.ApplicationName; service=$r.ServiceName; "
+            "interfaces=$r.InterfaceTypes; "
+            "remote=$r.RemoteAddresses; active=($on -and (($r.Profiles -band $active) -eq $active))}}catch{}}); "
+            "ConvertTo-Json -InputObject $rows -Compress"
+        )
+        try:
+            result = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command],
+                                    capture_output=True, timeout=4, text=True,
+                                    creationflags=_NO_WINDOW)
+            if result.returncode:
+                return result_map
+            for rule in json.loads(result.stdout):
+                ip = rule["ip"]
+                networks = [ipaddress.ip_network(x.strip(), strict=False) for x in rule["remote"].split(',')]
+                exact = any(n.num_addresses == 1 and n.network_address == ipaddress.ip_address(ip) for n in networks)
+                result_map[ip] = bool(rule["enabled"] and rule["active"] and rule["action"] == 0
+                                      and rule["direction"] == 1 and exact and rule.get("protocol") == 256
+                                      and rule.get("local") == "*" and not rule.get("application")
+                                      and not rule.get("service") and rule.get("interfaces") == "All")
+        except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
+            pass
+        return result_map
+
+    def _verified_entry(self, ip, force=False):
+        entry = dict(self._blocked[ip])
+        cached = self._verification.get(ip)
+        if force or not cached or time.monotonic() - cached[0] > 5:
+            cached = (time.monotonic(), self._verify_firewall_rule(ip))
+            self._verification[ip] = cached
+        entry["firewall_rule"] = cached[1]
+        entry["block_scope"] = "monitoring_pc"
+        entry["rule_status"] = "verified" if cached[1] else "unverified"
+        return entry
+
+    def record_reachability(self, ip, target_ip, reachable, note):
+        """Operator reports a test from the attacker; never infer this from packets."""
+        ip = str(ipaddress.ip_address(ip))
+        target_ip = str(ipaddress.ip_address(target_ip))
+        with self._lock:
+            self._reload_if_stale()
+            if ip not in self._blocked:
+                raise ValueError("No block entry exists for this source")
+            entry = self._blocked[ip]
+            entry.setdefault("reachability_checks", {})[target_ip] = {
+                "reachable": reachable, "note": note, "method": "operator_reported",
+                "checked_at": datetime.now().isoformat(timespec="seconds"),
+            }
+            self._save()
+            return self._verified_entry(ip)
+
     def block_ip(
         self,
         ip: str,
@@ -145,16 +273,31 @@ class IPBlocker:
         Add an IP to the blocklist and (best-effort) apply a Windows Firewall rule.
         Returns the block entry dict.
         """
+        try:
+            ip = str(ipaddress.ip_address(ip))
+        except ValueError as exc:
+            raise ValueError(f"Invalid IP address: {ip}") from exc
         with self._lock:
+            self._reload_if_stale()
             if ip in self._blocked:
-                # Already blocked — just return existing entry
-                return self._blocked[ip]
+                entry = self._blocked[ip]
+                verified = self._verified_entry(ip, force=True)
+                if verified.get("firewall_rule"):
+                    return verified
+                # A previous attempt may have recorded a software-only block.
+                # Retry OS enforcement when privileges or firewall availability change.
+                entry["firewall_rule"] = self._apply_firewall_rule(ip)
+                if entry["firewall_rule"]:
+                    entry["blocked_at"] = datetime.now().isoformat(timespec="microseconds")
+                    entry.pop("reachability_checks", None)
+                self._save()
+                return self._verified_entry(ip, force=True)
 
             entry = {
                 "ip":           ip,
                 "reason":       reason,
                 "blocked_by":   blocked_by,
-                "blocked_at":   datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "blocked_at":   datetime.now().isoformat(timespec="microseconds"),
                 "severity":     severity,
                 "attack_type":  attack_type,
                 "firewall_rule": False,
@@ -166,15 +309,22 @@ class IPBlocker:
             self._blocked[ip] = entry
             self._save()
             print(f"[FIREWALL] Blocked IP: {ip}  reason={reason}  fw_rule={entry['firewall_rule']}")
-            return entry
+            return self._verified_entry(ip, force=True)
 
     def unblock_ip(self, ip: str) -> bool:
-        """Remove an IP from the blocklist and delete its firewall rule."""
+        """Remove an IP from the blocklist and delete its firewall rule (best-effort)."""
         with self._lock:
+            self._reload_if_stale()
             if ip not in self._blocked:
                 return False
-            self._remove_firewall_rule(ip)
+            entry = self._blocked[ip]
+            # Best-effort: try to remove the OS firewall rule but never let
+            # netsh failure prevent the IP from being removed from the JSON
+            # blocklist (e.g. when Flask is not running as Administrator).
+            if entry.get("firewall_rule"):
+                self._remove_firewall_rule(ip)
             del self._blocked[ip]
+            self._verification.pop(ip, None)
             self._save()
             print(f"[FIREWALL] Unblocked IP: {ip}")
             return True
@@ -187,19 +337,28 @@ class IPBlocker:
     def get_entry(self, ip: str) -> dict | None:
         with self._lock:
             self._reload_if_stale()
-            return self._blocked.get(ip)
+            return self._verified_entry(ip) if ip in self._blocked else None
 
     def get_all(self) -> list[dict]:
         with self._lock:
-            return list(self._blocked.values())
+            self._reload_if_stale()
+            stale = [ip for ip in self._blocked if ip not in self._verification
+                     or time.monotonic() - self._verification[ip][0] > 5]
+            if len(stale) > 1:
+                results = self._verify_many(stale)
+                checked_at = time.monotonic()
+                self._verification.update({ip: (checked_at, results.get(ip, False)) for ip in stale})
+            return [self._verified_entry(ip) for ip in self._blocked]
 
     def get_stats(self) -> dict:
         with self._lock:
+            self._reload_if_stale()
             total      = len(self._blocked)
-            fw_applied = sum(1 for e in self._blocked.values() if e.get("firewall_rule"))
+            verified = [ip for ip in self._blocked if self._verified_entry(ip)["firewall_rule"]]
+            fw_applied = len(verified)
             return {
                 "total_blocked":    total,
                 "firewall_applied": fw_applied,
                 "software_only":    total - fw_applied,
-                "blocked_ips":      list(self._blocked.keys()),
+                "blocked_ips":      verified,
             }

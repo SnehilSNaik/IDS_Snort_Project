@@ -22,6 +22,7 @@ import os
 import sys
 import re
 import json
+import ipaddress
 import time
 import subprocess
 import threading
@@ -32,13 +33,12 @@ from datetime import datetime
 BASE_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
-from email_alert.send_alert import send_email_alert
 
 # ── Paths ─────────────────────────────────────────────────
 SNORT_EXE   = r"C:\Snort\bin\snort.exe"
 SNORT_CONF  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ids_project.conf")
 SNORT_LOG   = r"C:\Snort\log"
-ALERT_FILE  = os.path.join(SNORT_LOG, "alert")
+ALERT_FILE  = os.path.join(SNORT_LOG, "alert.ids")
 ALERTS_JSON = os.path.join(BASE_DIR, "alerts", "alerts.json")
 
 # ── Interface (Wi-Fi on this machine) ─────────────────────
@@ -61,8 +61,24 @@ ALERT_RE  = re.compile(
 )
 # Line with Priority:
 PRIO_RE   = re.compile(r"\[Priority:\s*(\d+)\]")
-# Line with IPs: {PROTO} src -> dst
-IP_RE     = re.compile(r"\{(\w+)\}\s+([\d.]+).*?->\s+([\d.]+)")
+# Line with endpoints: {PROTO} src[:port] -> dst[:port]. Supports IPv4 and IPv6.
+IP_RE     = re.compile(r"\{(\w+)\}\s+(\S+)\s*->\s*(\S+)")
+
+
+def _parse_endpoint_ip(endpoint: str) -> str | None:
+    """Extract and normalize an IPv4 or IPv6 address from Snort's endpoint token."""
+    endpoint = endpoint.strip().strip(",")
+    if endpoint.startswith("[") and "]" in endpoint:
+        endpoint = endpoint[1:endpoint.index("]")]
+    candidates = [endpoint]
+    if ":" in endpoint:
+        candidates.append(endpoint.rsplit(":", 1)[0])  # Snort prints the port after the IP.
+    for candidate in candidates:
+        try:
+            return str(ipaddress.ip_address(candidate))
+        except ValueError:
+            continue
+    return None
 
 
 # ── Alert UDP sender ──────────────────────────────────────
@@ -101,8 +117,10 @@ def parse_alert_block(block: str):
     # Parse IPs and protocol
     m_ip = IP_RE.search(block)
     protocol = m_ip.group(1) if m_ip else "Unknown"
-    src_ip   = m_ip.group(2) if m_ip else "0.0.0.0"
-    dst_ip   = m_ip.group(3) if m_ip else "0.0.0.0"
+    src_ip   = _parse_endpoint_ip(m_ip.group(2)) if m_ip else None
+    dst_ip   = _parse_endpoint_ip(m_ip.group(3)) if m_ip else None
+    src_ip   = src_ip or "0.0.0.0"
+    dst_ip   = dst_ip or "0.0.0.0"
 
     # Normalise timestamp
     try:
@@ -135,7 +153,7 @@ def parse_alert_block(block: str):
 # ── Tail the Snort alert file ─────────────────────────────
 def tail_alert_file():
     """
-    Blocks and reads new lines from C:\Snort\log\alert as Snort appends them.
+    Blocks and reads new lines from C:\Snort\log\alert.ids as Snort appends them.
     Buffers multi-line alert blocks and fires parse_alert_block() on each.
     """
     print(f"[SNORT_READER] Watching: {ALERT_FILE}")
@@ -159,9 +177,6 @@ def tail_alert_file():
                     alert = parse_alert_block(block)
                     if alert:
                         save_alert(alert)
-                        threading.Thread(
-                            target=send_email_alert, args=(alert,)
-                        ).start()
                         sev_icon = {"HIGH": "[!]", "MEDIUM": "[-]", "LOW": "[i]"}.get(
                             alert["severity"], "[?]"
                         )
@@ -183,9 +198,6 @@ def tail_alert_file():
                     alert = parse_alert_block(block)
                     if alert:
                         save_alert(alert)
-                        threading.Thread(
-                            target=send_email_alert, args=(alert,)
-                        ).start()
                         sev_icon = {"HIGH": "[!]", "MEDIUM": "[-]", "LOW": "[i]"}.get(
                             alert["severity"], "[?]"
                         )

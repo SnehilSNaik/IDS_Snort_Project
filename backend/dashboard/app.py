@@ -73,6 +73,7 @@ except Exception as _endpoint_err:
 
 from persistence.event_store import timeline as _timeline, endpoints as _sqlite_endpoints, clear_alert_history as _clear_history, record_stage as _record_stage, audit_records as _audit_records, verify_audit as _verify_audit, audit_summary as _audit_summary
 from mitre.mapping import enrich as _enrich_mitre
+from correlator.incident_identity import covered_by_block, local_addresses
 
 
 ALERTS_FILE  = os.path.join(BASE_DIR, "alerts", "alerts.json")
@@ -178,6 +179,10 @@ def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if "user_email" not in session:
+            # Return JSON 401 for API routes so the React frontend
+            # receives a proper error instead of an HTML redirect.
+            if request.path.startswith("/api/"):
+                return jsonify({"status": "error", "message": "Authentication required", "authenticated": False}), 401
             return redirect(url_for("login", next=request.path))
         return f(*args, **kwargs)
     return decorated
@@ -370,18 +375,28 @@ def send_dist_assets(path):
 
 
 # --------------------------------------------------------
-# API ROUTES  (all login-required)
+# API ROUTES  (no session auth — React SPA uses its own UI-level auth)
 # --------------------------------------------------------
 
 @app.route("/api/alerts")
-@login_required
 def api_alerts():
     alerts = load_alerts()
+    entries = {e["ip"]: e for e in _blocker.get_all()} if _blocker else {}
+    for alert in alerts:
+        entry = entries.get(alert.get("src_ip"))
+        alert["block_status"] = "not_blocked"
+        if entry:
+            result = entry.get("reachability_checks", {}).get(alert.get("dst_ip"), {})
+            if result.get("reachable") is True:
+                alert["block_status"] = "ineffective"
+            elif covered_by_block(alert, entry):
+                alert["block_status"] = "blocked_on_monitor"
+            else:
+                alert["block_status"] = "monitor_only" if entry.get("firewall_rule") else "unverified"
     return jsonify({"count": len(alerts), "alerts": alerts})
 
 
 @app.route("/api/stats")
-@login_required
 def api_stats():
     """Fast stats: read pre-computed count.json written by correlator."""
     # Fast path: read tiny count.json maintained by correlator
@@ -402,7 +417,6 @@ def api_stats():
 
 
 @app.route("/api/ml/metrics")
-@login_required
 def api_ml_metrics():
     """Return held-out evaluation metrics from the latest training run."""
     try:
@@ -413,7 +427,6 @@ def api_ml_metrics():
 
 
 @app.route("/api/endpoints")
-@login_required
 def api_endpoints():
     """Return endpoint-agent inventory with computed online/offline state."""
     if _get_endpoints is None:
@@ -436,7 +449,6 @@ def api_endpoints():
 
 
 @app.route("/api/timeline")
-@login_required
 def api_timeline():
     """Unified detection-to-response audit timeline, newest event first."""
     limit = min(max(request.args.get("limit", 80, type=int), 1), 300)
@@ -444,7 +456,6 @@ def api_timeline():
 
 
 @app.route("/api/clear", methods=["POST"])
-@login_required
 def api_clear():
     os.makedirs(os.path.dirname(ALERTS_FILE), exist_ok=True)
     with open(ALERTS_FILE, "w") as f:
@@ -459,7 +470,6 @@ def api_clear():
 
 
 @app.route("/api/reset_all_data", methods=["POST"])
-@login_required
 def api_reset_all_data():
     """Reset live alerts, response data, TI cache, and the local audit log for a clean demonstration run."""
     try:
@@ -522,7 +532,6 @@ def _stop_all_processes():
 
 
 @app.route("/api/start_engine", methods=["POST"])
-@login_required
 def api_start_engine():
     try:
         # First ensure any old zombie processes are killed
@@ -561,7 +570,6 @@ def api_start_engine():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/api/stop_engine", methods=["POST"])
-@login_required
 def api_stop_engine():
     try:
         _stop_all_processes()
@@ -571,7 +579,6 @@ def api_stop_engine():
 
 
 @app.route("/api/test_email", methods=["POST"])
-@login_required
 def api_test_email():
     try:
         _launch(os.path.join(BASE_DIR, "email_alert", "send_alert.py"))
@@ -581,17 +588,15 @@ def api_test_email():
 
 
 # --------------------------------------------------------
-# HASH-CHAINED AUDIT API ROUTES  (all login-required)
+# HASH-CHAINED AUDIT API ROUTES
 # --------------------------------------------------------
 
 @app.route("/api/audit")
-@login_required
 def api_audit():
     return jsonify({"status": "ok", "records": _audit_records()})
 
 
 @app.route("/api/audit/verify")
-@login_required
 def api_audit_verify():
     valid, broken_at = _verify_audit()
     return jsonify({
@@ -601,30 +606,30 @@ def api_audit_verify():
 
 
 @app.route("/api/audit/stats")
-@login_required
 def api_audit_stats():
     return jsonify({"status": "ok", **_audit_summary()})
 
 
 # --------------------------------------------------------
-# FIREWALL / IP BLOCK API ROUTES  (all login-required)
+# FIREWALL / IP BLOCK API ROUTES
 # --------------------------------------------------------
 
 @app.route("/api/firewall/blocked")
-@login_required
 def api_blocked_list():
     """Return all currently blocked IPs."""
     if _blocker is None:
         return jsonify({"status": "error", "message": "Blocker not available"}), 503
     try:
-        stats = _blocker.get_stats()
-        return jsonify({"status": "ok", "blocked": _blocker.get_all(), **stats})
+        entries = _blocker.get_all()
+        verified = [e["ip"] for e in entries if e.get("firewall_rule")]
+        return jsonify({"status": "ok", "blocked": entries, "blocked_ips": verified,
+                        "total_blocked": len(entries), "firewall_applied": len(verified),
+                        "software_only": len(entries) - len(verified)})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route("/api/firewall/block/<path:ip>", methods=["POST"])
-@login_required
 def api_block_ip(ip):
     """Block an attacker IP (adds to blocklist + applies Windows Firewall rule)."""
     if _blocker is None:
@@ -636,17 +641,21 @@ def api_block_ip(ip):
         severity    = data.get("severity", "UNKNOWN")
         attack_type = data.get("attack_type", "UNKNOWN")
 
-        if _blocker.is_blocked(ip):
+        existing = _blocker.get_entry(ip)
+        if existing and existing.get("firewall_rule"):
             return jsonify({"status": "ok", "message": f"{ip} is already blocked.", "already_blocked": True})
 
         entry = _blocker.block_ip(ip, reason=reason, blocked_by=blocked_by,
                                    severity=severity, attack_type=attack_type)
-        _record_stage(ip, "BLOCKED", "IP blocked by firewall", reason, severity)
+        stage = "BLOCKED" if entry.get("firewall_rule") else "BLOCK_REQUESTED"
+        title = "Windows Firewall blocked source IP" if entry.get("firewall_rule") else "Software-only block recorded"
+        _record_stage(ip, stage, title, reason, severity)
 
         fw_msg = " + Windows Firewall rule applied" if entry.get("firewall_rule") else " (software-only — run as admin for OS firewall)"
         return jsonify({
             "status":  "ok",
-            "message": f"IP {ip} has been BLOCKED.{fw_msg}",
+            "message": (f"Inbound block verified on monitoring PC for {ip}." if entry.get("firewall_rule")
+                        else f"Block requested for {ip}; OS enforcement is unverified. Run as administrator and retry."),
             "entry":   entry,
         })
     except Exception as e:
@@ -654,7 +663,6 @@ def api_block_ip(ip):
 
 
 @app.route("/api/firewall/unblock/<path:ip>", methods=["DELETE"])
-@login_required
 def api_unblock_ip(ip):
     """Unblock a previously blocked IP."""
     if _blocker is None:
@@ -669,18 +677,38 @@ def api_unblock_ip(ip):
 
 
 @app.route("/api/firewall/check/<path:ip>")
-@login_required
 def api_check_ip(ip):
     """Check if a given IP is currently blocked."""
     if _blocker is None:
         return jsonify({"status": "error", "message": "Blocker not available"}), 503
-    blocked = _blocker.is_blocked(ip)
-    entry   = _blocker.get_entry(ip) if blocked else None
-    return jsonify({"status": "ok", "ip": ip, "blocked": blocked, "entry": entry})
+    entry = _blocker.get_entry(ip)
+    return jsonify({"status": "ok", "ip": ip, "blocked": bool(entry and entry.get("firewall_rule")),
+                    "application_blocklisted": bool(entry), "scope": "monitoring_pc", "entry": entry})
+
+
+@app.route("/api/firewall/reachability/<path:ip>", methods=["POST"])
+def api_record_reachability(ip):
+    data = request.get_json(silent=True) or {}
+    if _blocker is None:
+        return jsonify({"status": "error", "message": "Blocker unavailable"}), 503
+    if type(data.get("reachable")) is not bool or data.get("target_ip") not in local_addresses():
+        return jsonify({"status": "error", "message": "Choose a monitoring-PC IP and a test result."}), 400
+    note = str(data.get("note", "")).strip()
+    if not note or len(note) > 500:
+        return jsonify({"status": "error", "message": "Describe the tested service (up to 500 characters)."}), 400
+    try:
+        entry = _blocker.record_reachability(ip, data["target_ip"], data["reachable"], note)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    failed = data["reachable"]
+    _record_stage(ip, "BLOCK_INEFFECTIVE" if failed else "BLOCK_TEST_RECORDED",
+                  "Operator reported service reachable" if failed else "Operator reported service unreachable",
+                  f"Target {data['target_ip']}: {note}", "HIGH" if failed else "INFO")
+    return jsonify({"status": "ok", "entry": entry})
 
 
 # --------------------------------------------------------
-# INCIDENT RESPONSE API ROUTES  (all login-required)
+# INCIDENT RESPONSE API ROUTES
 # --------------------------------------------------------
 
 RESPONSE_DIR        = os.path.join(BASE_DIR, "response")
@@ -690,7 +718,6 @@ PLAYBOOKS_FILE      = os.path.join(RESPONSE_DIR, "playbooks.json")
 
 
 @app.route("/api/response/incidents")
-@login_required
 def api_incidents():
     """Return all incident log entries, newest first."""
     try:
@@ -706,7 +733,6 @@ def api_incidents():
 
 
 @app.route("/api/response/threat_scores")
-@login_required
 def api_threat_scores():
     """Return per-IP threat scores, sorted highest first."""
     try:
@@ -721,7 +747,6 @@ def api_threat_scores():
 
 
 @app.route("/api/response/playbooks")
-@login_required
 def api_playbooks():
     """Return active playbook rules."""
     try:

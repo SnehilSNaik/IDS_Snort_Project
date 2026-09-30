@@ -33,7 +33,6 @@ from collections import deque, defaultdict
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from email_alert.send_alert import send_email_alert
 
 import socket
 import logging
@@ -321,7 +320,6 @@ def check_icmp_flood(src_ip, dst_ip, packet_size, now):
     }
 
     save_alert(alert)
-    threading.Thread(target=send_email_alert, args=(alert,)).start()
 
     print(
         f"[! ICMP FLOOD] {timestamp} | [HIGH] HIGH | "
@@ -500,7 +498,6 @@ def make_detector(model, scaler, feature_config):
             }
 
             save_alert(alert)
-            threading.Thread(target=send_email_alert, args=(alert,)).start()
 
             sev_icon = {"HIGH": "[!]", "MEDIUM": "[-]", "LOW": "[i]"}.get(severity, "[?]")
             print(
@@ -549,7 +546,6 @@ def make_cicids_flow_detector(model, scaler):
         }
         send_tick(flow.src_ip, severity)
         save_alert(alert)
-        threading.Thread(target=send_email_alert, args=(alert,), daemon=True).start()
         print(f"[! CIC-IDS FLOW] {severity} | {flow.protocol} | {flow.src_ip}:{flow.src_port} -> {flow.dst_ip}:{flow.dst_port} | {len(flow.forward_packets)} pkts, {packet_rate}/s")
 
     def packet_callback(packet):
