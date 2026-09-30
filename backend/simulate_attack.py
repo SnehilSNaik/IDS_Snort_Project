@@ -321,11 +321,13 @@ def main():
     parser = argparse.ArgumentParser(description="IDS Attack Simulator")
     parser.add_argument("--scenario", type=int, default=0,
                         help="Run only a specific scenario (1-6)")
+    parser.add_argument("--target", type=str, default=None,
+                        help="Override the victim/dst_ip in all alert payloads (e.g. 172.20.10.2)")
     args = parser.parse_args()
 
     banner()
-    victim_ip = get_local_ip()
-    print(f"   {_c(WHT, 'Victim IP  :')} {victim_ip}")
+    victim_ip = args.target if args.target else get_local_ip()
+    print(f"   {_c(WHT, 'Victim IP  :')} {victim_ip}  {'[--target override]' if args.target else '[auto-detected]'}")
     print(f"   {_c(WHT, 'Correlator :')} UDP {UDP_IP}:{UDP_PORT}")
     print()
     print(_c(YEL, "   Make sure the IDS Engine is engaged on the Dashboard!"))

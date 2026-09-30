@@ -68,6 +68,16 @@ def touch_alert(alert):
     """Refresh endpoint health and increment its alert count when it reports."""
     endpoint_id = alert.get("endpoint_id")
     if not endpoint_id:
+        # Fallback: match by dst_ip for injected/simulated alerts
+        dst_ip = alert.get("dst_ip", "")
+        if dst_ip:
+            with _lock:
+                records = _load()
+                for eid, rec in records.items():
+                    if rec.get("ip") == dst_ip:
+                        endpoint_id = eid
+                        break
+    if not endpoint_id:
         return
     with _lock:
         exists = endpoint_id in _load()

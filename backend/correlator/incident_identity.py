@@ -1,5 +1,6 @@
 """Conservative identities: never merge different victims or Snort signatures."""
 import ipaddress
+import os
 import socket
 import time
 
@@ -34,7 +35,12 @@ def incident_key(alert):
 
 
 def covered_by_block(alert, entry):
-    """This project's netsh rule is inbound on the monitor only."""
+    """Return True if the attacker block rule covers the alert's victim.
+
+    V1: victim must be one of this machine's own IP addresses.
+    V2: also accept the remote Victim PC IP (VICTIM_PC_IP env var),
+        since the block is pushed to that machine via SSH.
+    """
     if not entry or not entry.get("firewall_rule"):
         return False
     dst = str(alert.get("dst_ip", ""))
@@ -42,7 +48,17 @@ def covered_by_block(alert, entry):
         dst = str(ipaddress.ip_address(dst))
     except ValueError:
         return False
-    if dst not in local_addresses():
-        return False
-    result = entry.get("reachability_checks", {}).get(dst, {})
-    return result.get("reachable") is not True
+
+    # V1: victim is local to this machine
+    if dst in local_addresses():
+        result = entry.get("reachability_checks", {}).get(dst, {})
+        return result.get("reachable") is not True
+
+    # V2: victim is the remote Victim PC managed via SSH
+    victim_pc_ip = os.environ.get("VICTIM_PC_IP", "").strip()
+    if victim_pc_ip and dst == victim_pc_ip:
+        # Block was pushed remotely via SSH — treat as covered
+        result = entry.get("reachability_checks", {}).get(dst, {})
+        return result.get("reachable") is not True
+
+    return False

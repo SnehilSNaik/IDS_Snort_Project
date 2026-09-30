@@ -10,5 +10,17 @@
     "last_seen": "2026-09-21 18:12:06 UTC",
     "last_alert_at": "2026-09-21 18:12:06 UTC",
     "alert_count": 1
+  },
+  "Spoorthi-bb11c1012163": {
+    "endpoint_id": "Spoorthi-bb11c1012163",
+    "name": "Victim-PC-1",
+    "hostname": "Spoorthi",
+    "ip": "192.168.137.159",
+    "os": "Windows 11",
+    "agent_version": "2.0",
+    "first_seen": "2026-09-30 16:56:13 UTC",
+    "last_seen": "2026-09-30 19:11:08 UTC",
+    "last_alert_at": null,
+    "alert_count": 0
   }
 }
