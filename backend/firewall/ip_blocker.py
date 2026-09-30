@@ -2,11 +2,16 @@
 =============================================================
 firewall/ip_blocker.py  —  IDS_Snort_Project
 =============================================================
-IP Blocking Manager
+IP Blocking Manager  (V2: 3-Machine Setup Support)
 
 Maintains a persistent blocked-IP list in firewall/blocked_ips.json.
-Optionally applies Windows Firewall rules via netsh when running
-with admin privileges.
+Optionally applies Windows Firewall rules via netsh locally (admin)
+and REMOTELY on a Victim PC via SSH (V2 3-machine mode).
+
+V2 Environment Variables (set in backend/.env):
+    VICTIM_PC_IP    = 192.168.1.x     <- Victim PC's LAN IP
+    VICTIM_PC_USER  = Administrator   <- SSH login username
+    VICTIM_SSH_KEY  = C:\\path\\to\\id_rsa  <- Private key path
 
 Public API:
     blocker = IPBlocker()
@@ -27,6 +32,13 @@ import sys
 import threading
 import time
 from datetime import datetime
+
+# ── V2: Remote Victim PC SSH config (loaded from environment) ────────────────
+# Set these in backend/.env to enable the 3-machine architecture.
+VICTIM_PC_IP   = os.environ.get("VICTIM_PC_IP", "").strip()
+VICTIM_PC_USER = os.environ.get("VICTIM_PC_USER", "Administrator").strip()
+VICTIM_SSH_KEY = os.environ.get("VICTIM_SSH_KEY", "").strip()
+V2_ENABLED = bool(VICTIM_PC_IP)
 
 
 def _is_admin() -> bool:
@@ -115,71 +127,144 @@ class IPBlocker:
     @staticmethod
     def _apply_firewall_rule(ip: str) -> bool:
         """Create a Windows Firewall inbound block rule for the given IP.
-        Requires Administrator privileges. Returns False immediately if not elevated
-        so Flask is never blocked waiting on a UAC prompt.
+        Applies locally (requires admin) AND remotely on Victim PC via SSH (V2).
+        Returns True if at least the local rule was applied successfully.
         """
+        local_ok = False
         if not _is_admin():
-            print(f"[FIREWALL] Skipping OS rule for {ip} — not running as Administrator.")
-            return False
+            print(f"[FIREWALL] Skipping local OS rule for {ip} — not running as Administrator.")
+        else:
+            rule_name = IPBlocker._rule_name(ip)
+            try:
+                result = subprocess.run(
+                    [
+                        "netsh", "advfirewall", "firewall", "add", "rule",
+                        f"name={rule_name}",
+                        "dir=in",
+                        "action=block",
+                        f"remoteip={ip}",
+                        "protocol=any",
+                        "enable=yes",
+                        "profile=any",
+                    ],
+                    capture_output=True,
+                    timeout=3,
+                    creationflags=_NO_WINDOW,
+                )
+                if result.returncode != 0:
+                    error = (result.stderr or result.stdout or b"").decode("utf-8", errors="replace").strip()
+                    print(f"[FIREWALL] Windows Firewall rejected rule for {ip}: {error or 'netsh failed'}")
+                else:
+                    print(f"[FIREWALL] Local Windows Firewall rule added: block inbound from {ip}")
+                    local_ok = True
+            except subprocess.TimeoutExpired:
+                print(f"[FIREWALL] netsh timed out adding rule for {ip} — run as Administrator.")
+            except Exception as e:
+                print(f"[FIREWALL] Could not add local firewall rule (may need admin): {e}")
+
+        # ── V2: Remote block on Victim PC via SSH ────────────────────────────
+        if V2_ENABLED:
+            IPBlocker._apply_remote_firewall_rule(ip)
+
+        return local_ok
+
+    @staticmethod
+    def _build_ssh_cmd(remote_cmd: str) -> list:
+        """Build the SSH command list for the Victim PC."""
+        cmd = ["ssh", "-o", "StrictHostKeyChecking=no",
+               "-o", "ConnectTimeout=5",
+               "-o", "BatchMode=yes"]
+        if VICTIM_SSH_KEY:
+            cmd += ["-i", VICTIM_SSH_KEY]
+        cmd += [f"{VICTIM_PC_USER}@{VICTIM_PC_IP}", remote_cmd]
+        return cmd
+
+    @staticmethod
+    def _apply_remote_firewall_rule(ip: str) -> bool:
+        """V2: SSH into Victim PC and apply a netsh firewall block rule for the attacker IP."""
         rule_name = IPBlocker._rule_name(ip)
+        netsh_cmd = (
+            f'netsh advfirewall firewall add rule '
+            f'name="{rule_name}" dir=in action=block '
+            f'remoteip={ip} protocol=any enable=yes profile=any'
+        )
         try:
             result = subprocess.run(
-                [
-                    "netsh", "advfirewall", "firewall", "add", "rule",
-                    f"name={rule_name}",
-                    "dir=in",
-                    "action=block",
-                    f"remoteip={ip}",
-                    "protocol=any",
-                    "enable=yes",
-                    "profile=any",
-                ],
-                capture_output=True,
-                timeout=3,
-                creationflags=_NO_WINDOW,
+                IPBlocker._build_ssh_cmd(netsh_cmd),
+                capture_output=True, timeout=10, text=True,
             )
-            if result.returncode != 0:
-                error = (result.stderr or result.stdout or b"").decode("utf-8", errors="replace").strip()
-                print(f"[FIREWALL] Windows Firewall rejected rule for {ip}: {error or 'netsh failed'}")
+            if result.returncode == 0:
+                print(f"[FIREWALL V2] ✅ Remote block on Victim PC ({VICTIM_PC_IP}): {ip} blocked")
+                return True
+            else:
+                err = (result.stderr or result.stdout or "").strip()
+                print(f"[FIREWALL V2] ❌ Remote block failed on Victim PC ({VICTIM_PC_IP}): {err}")
                 return False
-            print(f"[FIREWALL] Windows Firewall rule added: block inbound from {ip}")
-            return True
         except subprocess.TimeoutExpired:
-            print(f"[FIREWALL] netsh timed out adding rule for {ip} — run as Administrator.")
+            print(f"[FIREWALL V2] ⏱ SSH timeout connecting to Victim PC ({VICTIM_PC_IP})")
+            return False
+        except FileNotFoundError:
+            print("[FIREWALL V2] ⚠ 'ssh' not found in PATH — install OpenSSH client on IDS machine")
             return False
         except Exception as e:
-            print(f"[FIREWALL] Could not add firewall rule (may need admin): {e}")
+            print(f"[FIREWALL V2] Remote block error: {e}")
+            return False
+
+    @staticmethod
+    def _remove_remote_firewall_rule(ip: str) -> bool:
+        """V2: SSH into Victim PC and remove the netsh block rule for the given IP."""
+        rule_name = IPBlocker._rule_name(ip)
+        netsh_cmd = f'netsh advfirewall firewall delete rule name="{rule_name}"'
+        try:
+            result = subprocess.run(
+                IPBlocker._build_ssh_cmd(netsh_cmd),
+                capture_output=True, timeout=10, text=True,
+            )
+            if result.returncode == 0:
+                print(f"[FIREWALL V2] ✅ Remote unblock on Victim PC ({VICTIM_PC_IP}): {ip} unblocked")
+                return True
+            else:
+                err = (result.stderr or result.stdout or "").strip()
+                print(f"[FIREWALL V2] ❌ Remote unblock failed ({VICTIM_PC_IP}): {err}")
+                return False
+        except Exception as e:
+            print(f"[FIREWALL V2] Remote unblock error: {e}")
             return False
 
     @staticmethod
     def _remove_firewall_rule(ip: str) -> bool:
-        """Remove the Windows Firewall block rule for the given IP."""
+        """Remove the Windows Firewall block rule locally and remotely (V2)."""
+        local_ok = False
         if not _is_admin():
-            print(f"[FIREWALL] Skipping OS rule removal for {ip} — not running as Administrator.")
-            return False
-        rule_name = IPBlocker._rule_name(ip)
-        try:
-            result = subprocess.run(
-                [
-                    "netsh", "advfirewall", "firewall", "delete", "rule",
-                    f"name={rule_name}",
-                ],
-                capture_output=True,
-                timeout=3,
-                creationflags=_NO_WINDOW,
-            )
-            if result.returncode != 0:
-                error = (result.stderr or result.stdout or b"").decode("utf-8", errors="replace").strip()
-                print(f"[FIREWALL] Windows Firewall could not remove rule for {ip}: {error or 'netsh failed'}")
-                return False
-            print(f"[FIREWALL] Windows Firewall rule removed for {ip}")
-            return True
-        except subprocess.TimeoutExpired:
-            print(f"[FIREWALL] netsh timed out removing rule for {ip}.")
-            return False
-        except Exception as e:
-            print(f"[FIREWALL] Could not remove firewall rule: {e}")
-            return False
+            print(f"[FIREWALL] Skipping local OS rule removal for {ip} — not running as Administrator.")
+        else:
+            rule_name = IPBlocker._rule_name(ip)
+            try:
+                result = subprocess.run(
+                    [
+                        "netsh", "advfirewall", "firewall", "delete", "rule",
+                        f"name={rule_name}",
+                    ],
+                    capture_output=True,
+                    timeout=3,
+                    creationflags=_NO_WINDOW,
+                )
+                if result.returncode != 0:
+                    error = (result.stderr or result.stdout or b"").decode("utf-8", errors="replace").strip()
+                    print(f"[FIREWALL] Windows Firewall could not remove rule for {ip}: {error or 'netsh failed'}")
+                else:
+                    print(f"[FIREWALL] Local Windows Firewall rule removed for {ip}")
+                    local_ok = True
+            except subprocess.TimeoutExpired:
+                print(f"[FIREWALL] netsh timed out removing rule for {ip}.")
+            except Exception as e:
+                print(f"[FIREWALL] Could not remove local firewall rule: {e}")
+
+        # ── V2: Remote unblock on Victim PC ──────────────────────────────────
+        if V2_ENABLED:
+            IPBlocker._remove_remote_firewall_rule(ip)
+
+        return local_ok
 
     # ------------------------------------------------------------------
     # Public API
@@ -301,14 +386,18 @@ class IPBlocker:
                 "severity":     severity,
                 "attack_type":  attack_type,
                 "firewall_rule": False,
+                "v2_mode":      V2_ENABLED,
+                "victim_pc":    VICTIM_PC_IP if V2_ENABLED else None,
             }
 
             # Try to apply OS-level firewall rule (admin required)
+            # In V2 mode, _apply_firewall_rule also SSHes into Victim PC.
             entry["firewall_rule"] = self._apply_firewall_rule(ip)
 
             self._blocked[ip] = entry
             self._save()
-            print(f"[FIREWALL] Blocked IP: {ip}  reason={reason}  fw_rule={entry['firewall_rule']}")
+            v2_tag = f" + remote Victim PC ({VICTIM_PC_IP})" if V2_ENABLED else ""
+            print(f"[FIREWALL] Blocked IP: {ip}  reason={reason}  fw_rule={entry['firewall_rule']}{v2_tag}")
             return self._verified_entry(ip, force=True)
 
     def unblock_ip(self, ip: str) -> bool:

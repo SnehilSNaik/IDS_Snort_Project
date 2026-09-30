@@ -1,6 +1,6 @@
-ï»¿# IDS_Snort_Project â€” Progress & Architecture Summary
+# IDS_Snort_Project — Progress & Architecture Summary
 
-> **Generated automatically** â€” load this file at the start of any new session to restore full context.
+> **Generated automatically** — load this file at the start of any new session to restore full context.
 > In future sessions: say "read PROGRESS.md and continue"
 
 ---
@@ -47,7 +47,7 @@ python simulate_attack.py    # Interactive, 6 attack scenarios
 
 ## Bugs Fixed (2026-09-30)
 
-1. **SECURITY BUG â€” Missing @login_required on Reachability Route**
+1. **SECURITY BUG — Missing @login_required on Reachability Route**
    - File: backend/dashboard/app.py (line 689)
    - Fix: Added @login_required to /api/firewall/reachability/<ip>
    - Previously allowed unauthenticated access; now returns HTTP 401
@@ -57,7 +57,7 @@ python simulate_attack.py    # Interactive, 6 attack scenarios
    - Fix: Changed docstring from triple-quotes to raw r-string (r\"\"\"...\"\"\")
    - Suppresses \S escape warning on Python 3.12+
 
-3. **DeprecationWarning â€” Date Parsing Without Year**  
+3. **DeprecationWarning — Date Parsing Without Year**  
    - File: backend/snort/snort_reader.py (line 127)
    - Fix: Prepend year to format string instead of .replace(year=...)
    - Avoids Python 3.15 breaking change around leap-day ambiguity
@@ -96,7 +96,7 @@ python simulate_attack.py    # Interactive, 6 attack scenarios
 
 ## ML Models (all trained and present)
 
-- Random Forest:  ml_model/model.pkl (13.8 MB) â€” 99.52% accuracy
+- Random Forest:  ml_model/model.pkl (13.8 MB) — 99.52% accuracy
 - RF Scaler:      ml_model/scaler.pkl
 - RF Metrics:     ml_model/metrics.json
 - LSTM AE Model:  ml_model/autoencoder_model.keras (866 KB)
@@ -149,19 +149,22 @@ backend/.env                     API keys (ipinfo.io configured)
 frontend/src/App.jsx             React SPA root
 frontend/src/components/         LiveRadar, IncidentResponse, etc.
 
-## Future Roadmap (V2 Architecture)
-**Goal: Implement a 3-Machine Setup (Attacker, Victim, IDS)**
 
-For the ultimate demonstration, the IDS can be adapted to block attacks directly on a separate Victim machine using **Remote Execution (SSH/WinRM)**.
+## V2 Architecture -- 3-Machine Setup IMPLEMENTED
 
-### Why this is the best approach:
-1. **Zero Network Changes:** No complex routing, virtual switches, or gateway router setup required.
-2. **Minimal Code Changes:** The current codebase already generates the 
-etsh firewall command. You just need to prepend ssh Administrator@<victim_ip> to the command string.
-3. **Realistic Architecture:** Modern SIEMs (Security Information and Event Management systems) work this wayâ€”passively monitoring traffic and sending automated commands via SSH/APIs to isolate compromised endpoints.
+**Goal: Block attacker IP on BOTH the IDS machine AND the Victim PC via remote SSH.**
 
-### Implementation Steps (For Later):
-1. **Enable SSH/WinRM** on the Victim Machine so it accepts remote commands.
-2. **Generate an SSH key** on the IDS machine to allow passwordless login to the Victim Machine.
-3. **Update ackend/firewall/ip_blocker.py**: Modify the _apply_firewall_rule function to run ssh user@victim_ip netsh advfirewall... instead of executing 
-etsh locally.
+### What was changed:
+1. backend/firewall/ip_blocker.py -- _apply_firewall_rule() now SSHes into Victim PC. New methods: _build_ssh_cmd(), _apply_remote_firewall_rule(), _remove_remote_firewall_rule(). Block entries store v2_mode + victim_pc fields.
+2. backend/.env -- Added VICTIM_PC_IP, VICTIM_PC_USER, VICTIM_SSH_KEY. Leave blank for V1 single-machine mode.
+3. backend/generate_ssh_key.ps1 (NEW) -- Run on IDS machine: generates ids_victim_key Ed25519 pair + prints public key.
+4. backend/setup_v2_victim.ps1 (NEW) -- Run on Victim PC as Admin: installs OpenSSH Server, opens port 22, stores IDS public key.
+
+### How to Activate V2:
+Step 1 - On IDS Machine: powershell -File backend\generate_ssh_key.ps1 (copy the public key)
+Step 2 - On Victim PC as Admin: powershell -File backend\setup_v2_victim.ps1 (paste public key)
+Step 3 - Fill in backend\.env: VICTIM_PC_IP / VICTIM_PC_USER / VICTIM_SSH_KEY then restart.
+
+### V2 Detection Flow:
+[Kali] attacks Victim PC -> agent.py + Snort -> UDP 9999 -> Correlator -> block_ip()
+   -> LOCAL netsh on IDS PC  +  SSH -> netsh on Victim PC (simultaneous)
